@@ -13,16 +13,16 @@ CREATE TABLE app_config (
 
 -- Tabla de entradas de documentos
 CREATE TABLE document_entries (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     content TEXT,
-    created_at DATETIME
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Tabla de logs de carga de documentos
 CREATE TABLE document_upload_log (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    filename VARCHAR(255),
-    upload_time DATETIME
+    filename VARCHAR(255) NOT NULL,
+    upload_time DATETIME NOT NULL
 );
 
 -- Tabla de logs de búsqueda
@@ -40,39 +40,47 @@ CREATE TABLE tiers (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(255),
     description TEXT,
-    active BOOLEAN,
+    active TINYINT(1),
     price FLOAT,
     search_limit INT,
-    price_drop_notification BOOLEAN,
+    price_drop_notification TINYINT(1),
     search_history_limit INT,
-    price_fluctuation_graph BOOLEAN,
-    autocomplete_reference BOOLEAN,
-    advanced_search BOOLEAN,
-    extra_properties JSON
+    price_fluctuation_graph TINYINT(1),
+    autocomplete_reference TINYINT(1),
+    advanced_search TINYINT(1),
+    extra_properties TEXT
 );
 
 -- Tabla de usuarios
 CREATE TABLE users (
     user_id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    first_name VARCHAR(255),
-    last_name VARCHAR(255),
-    email VARCHAR(255) UNIQUE,
-    password VARCHAR(255),
-    role VARCHAR(100),
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    role VARCHAR(50),
     planId INT,
-    phone VARCHAR(50),
-    active BOOLEAN
+    phone VARCHAR(20),
+    active TINYINT(1) DEFAULT 1
 );
 
 -- Tabla de relojes
 CREATE TABLE watches (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    reference_code VARCHAR(255),
-    color_dial VARCHAR(100),
-    production_year INT,
-    watch_condition VARCHAR(100),
-    cost DOUBLE,
-    created_at DATETIME,
+    id INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    reference_code VARCHAR(50) NOT NULL,
+    color_dial VARCHAR(50),
+    production_year SMALLINT UNSIGNED,
+    watch_condition VARCHAR(50),
+    cost DECIMAL(20,2),
     currency VARCHAR(10),
-    watch_info TEXT
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    watch_info VARCHAR(60)
+);
+
+-- Tabla de favoritos
+CREATE TABLE user_favorites (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    reference VARCHAR(100) NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
