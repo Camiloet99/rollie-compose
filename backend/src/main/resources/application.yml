@@ -29,3 +29,8 @@ spring:
     url: r2dbc:pool:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:rollie}?serverTimezone=UTC
     username: ${DB_USER:root}
     password: ${DB_PASSWORD:1152225289}
+
+python:
+  service:
+    url: ${PYTHON_SERVICE_URL:http://localhost:8000}
+

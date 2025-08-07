@@ -3,6 +3,7 @@ package com.rollie.mainservice.services;
 import com.rollie.mainservice.entities.DocumentUploadLog;
 import com.rollie.mainservice.repository.DocumentUploadLogRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.data.domain.Sort;
@@ -23,13 +24,20 @@ public class DocumentUploadService {
 
     private final DocumentUploadLogRepository logRepository;
 
-    private final WebClient webClient = WebClient.builder()
-            .baseUrl("http://localhost:8000")
-            .build();
+    private final WebClient webClient;
+
+    public DocumentUploadService(
+            DocumentUploadLogRepository logRepository,
+            @Value("${python.service.url}") String pythonServiceUrl
+    ) {
+        this.logRepository = logRepository;
+        this.webClient = WebClient.builder()
+                .baseUrl(pythonServiceUrl)
+                .build();
+    }
 
     public Mono<List<DocumentUploadLog>> getAllUploadLogs() {
-        return logRepository.findAll()
-                .collectList();
+        return logRepository.findAll().collectList();
     }
 
     public Mono<Object> forwardFileToPythonBackend(FilePart filePart) {

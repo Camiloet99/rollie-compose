@@ -5,42 +5,48 @@ services:
     image: mysql:8
     container_name: mysql
     environment:
-      MYSQL_ROOT_PASSWORD: yourpassword
-      MYSQL_DATABASE: yourdb
+      MYSQL_ROOT_PASSWORD: 1152225289
+      MYSQL_DATABASE: rollie
     volumes:
       - mysql_data:/var/lib/mysql
       - ./init-sql:/docker-entrypoint-initdb.d
     ports:
-      - "3306:3306"
+      - "3307:3306"
 
   backend:
     build: ./backend
+    container_name: backend
     ports:
       - "8080:8080"
     environment:
       DB_HOST: mysql
       DB_PORT: 3306
+      DB_NAME: rollie
       DB_USER: root
-      DB_PASSWORD: yourpassword
-      DB_NAME: yourdb
+      DB_PASSWORD: 1152225289
+      PYTHON_SERVICE_URL: http://python-service:8000
     depends_on:
       - mysql
+      - python-service
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_API_URL: http://backend:8080
+    container_name: frontend
     ports:
       - "80:80"
+    depends_on:
+      - backend
 
   python-service:
     build: ./python-service
+    container_name: python-service
     ports:
       - "8000:8000"
     environment:
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_USER: root
-      DB_PASSWORD: yourpassword
-      DB_NAME: yourdb
+      DATABASE_URL: mysql+pymysql://root:1152225289@mysql:3306/rollie
     depends_on:
       - mysql
 
