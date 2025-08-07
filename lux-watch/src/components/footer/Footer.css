@@ -1,0 +1,10 @@
+.footer-logo {
+    transition: all 0.3s ease-in-out;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.footer-logo:hover {
+    color: gray;
+    transform: scale(1.05) rotate(-1deg);
+}
