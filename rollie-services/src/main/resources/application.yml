@@ -1,0 +1,31 @@
+# Spring
+server:
+  port: 8080
+  forward-headers-strategy: framework
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
+spring:
+  main:
+    banner-mode: console
+    lazy-initialization: true
+---
+# JWT
+jwt:
+  secret: ${JWT_SECRET:EPzuE1fY/zKURZ0eklR27ULNZTpAO51+dfDWt3iJRI7zyv+UdDjXaDlkV7X1I04r89mvdet5CAWSFkfrKv+fmg==}
+  expiration: 86400000 # 1 day in milliseconds
+---
+# Logging
+logging:
+  level:
+    root: INFO
+    org.springframework.security: INFO
+---
+# R2DBC
+spring:
+  r2dbc:
+    show-sql: true
+    url: r2dbc:pool:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:rollie}?serverTimezone=UTC
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:1152225289}
