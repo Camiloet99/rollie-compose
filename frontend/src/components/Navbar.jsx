@@ -78,12 +78,9 @@ export default function AppNavbar() {
                 <Nav.Link as={Link} to="/account">
                   My Account
                 </Nav.Link>
-                {user?.role !== "ADMIN" && (
-                  <Nav.Link as={Link} to="/plans">
-                    Plans
-                  </Nav.Link>
-                )}
-
+                <Nav.Link as={Link} to="/plans">
+                  Plans
+                </Nav.Link>
                 <Button
                   variant="outline-light"
                   size="sm"

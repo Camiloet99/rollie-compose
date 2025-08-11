@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Helmet } from "react-helmet";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -10,7 +10,6 @@ import {
   Card,
   Alert,
 } from "react-bootstrap";
-import { FaSearch, FaTimesCircle } from "react-icons/fa";
 import PageTransition from "../../components/PageTransition";
 import { saveSearchToHistory } from "../../utils/history";
 import SearchHistory from "../../components/SearchHistory";
@@ -19,102 +18,163 @@ import {
   searchWatches,
   getWatchByReference,
 } from "../../services/watchService";
+import ActiveFilterChips from "../../components/search/ActiveFilterChips";
 import SearchResultsModal from "../../components/searchResultsModal/SearchResultsModal";
 import AdvancedFilters from "../../components/AdvancedFilters";
-import "./Search.css"; // Import your custom styles
+import SearchForm from "../../components/search/SearchForm";
+import { usePersistentSearchParams } from "../../hooks/usePersistentSearchParams";
+import "./Search.css";
+import CompareButton from "../../components/compare/CompareButton";
+import CompareDrawer from "../../components/compare/CompareDrawer";
+
+const DEFAULT_FILTERS = {
+  reference: "",
+  brand: "",
+  condition: "",
+  color: "",
+  material: "",
+  year: "",
+  priceMin: "",
+  priceMax: "",
+  currency: "",
+  extraInfo: "",
+  adv: "", // "1" cuando esté abierto
+};
 
 export default function Search() {
-  const [filters, setFilters] = useState({
-    reference: "",
-    brand: "",
-    condition: "",
-    color: "",
-    material: "",
-    year: "",
-    priceMin: "",
-    priceMax: "",
-    currency: "",
-    extraInfo: "",
-  });
+  const { user, tiers } = useAuth();
 
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  // ---- deep links ----
+  const [filters, setFilters] = usePersistentSearchParams(DEFAULT_FILTERS);
+
+  const [showAdvanced, setShowAdvanced] = useState(Boolean(filters.adv));
   const [results, setResults] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [historyRefreshToggle, setHistoryRefreshToggle] = useState(false);
-  const { user, tiers } = useAuth();
-  const [referenceSuggestions, setReferenceSuggestions] = useState([]);
-  const [isTyping, setIsTyping] = useState(false);
+  const [limitExceeded, setLimitExceeded] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // Nuevo: estados derivados del tier del usuario
+  // ---- features por tier ----
+  const userTier = useMemo(
+    () => tiers?.find((t) => t.id === user?.planId),
+    [tiers, user?.planId]
+  );
   const [showAdvancedEnabled, setShowAdvancedEnabled] = useState(false);
   const [searchHistoryLimit, setSearchHistoryLimit] = useState(0);
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false);
-  const [limitExceeded, setLimitExceeded] = useState(false);
-
-  // Obtener tier actual del usuario
-  const userTier = tiers?.find((t) => t.id === user?.planId);
 
   useEffect(() => {
     if (userTier) {
-      setShowAdvancedEnabled(userTier.advancedSearch || false);
+      setShowAdvancedEnabled(Boolean(userTier.advancedSearch));
       setSearchHistoryLimit(userTier.searchHistoryLimit || 0);
-      setAutocompleteEnabled(userTier.autocompleteReference || false);
+      setAutocompleteEnabled(Boolean(userTier.autocompleteReference));
     }
   }, [userTier]);
 
-  const handleChange = async (e) => {
-    const { name, value } = e.target;
-    setFilters({ ...filters, [name]: value });
+  // ---- autocomplete: debounce + abort ----
+  const [referenceSuggestions, setReferenceSuggestions] = useState([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const abortRef = useRef(null);
+  const debounceRef = useRef(null);
 
-    if (name === "reference") {
-      setIsTyping(true);
-      if (autocompleteEnabled && value.length >= 3) {
-        // ✅ solo si está permitido
-        try {
-          const suggestions = await autocompleteReference(value);
-          setReferenceSuggestions(suggestions);
-        } catch (err) {
-          setReferenceSuggestions([]);
-        }
-      } else {
-        setReferenceSuggestions([]);
-      }
+  useEffect(() => {
+    if (!autocompleteEnabled) {
+      setReferenceSuggestions([]);
+      setSuggestionsOpen(false);
+      return;
     }
+    const value = `${filters.reference ?? ""}`.trim();
+    if (value.length < 3) {
+      setReferenceSuggestions([]);
+      setSuggestionsOpen(false);
+      return;
+    }
+
+    setSuggestionsLoading(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      // abort anterior
+      if (abortRef.current) abortRef.current.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      try {
+        const suggestions = await autocompleteReference(value, {
+          signal: controller.signal,
+        });
+        setReferenceSuggestions(suggestions || []);
+        setSuggestionsOpen(true);
+      } catch (_e) {
+        // ignorar cancelaciones
+        setReferenceSuggestions([]);
+        setSuggestionsOpen(true);
+      } finally {
+        setSuggestionsLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [filters.reference, autocompleteEnabled]);
+
+  const onPickSuggestion = (val, _setFilters) => {
+    _setFilters((prev) => ({ ...prev, reference: val }));
+    setReferenceSuggestions([]);
+    setSuggestionsOpen(false);
+  };
+
+  // ---- mantener adv en URL ----
+  useEffect(() => {
+    setFilters((prev) => ({ ...prev, adv: showAdvanced ? "1" : "" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAdvanced]);
+
+  // ---- submit búsqueda ----
+  const runSearch = async (activeFilters) => {
+    let fetchedResults = [];
+    if (showAdvancedEnabled && showAdvanced) {
+      const payload = {
+        referenceCode: activeFilters.reference,
+        colorDial: activeFilters.color,
+        productionYear: activeFilters.year
+          ? parseInt(activeFilters.year)
+          : null,
+        watchCondition: activeFilters.condition,
+        minPrice: activeFilters.priceMin
+          ? parseFloat(activeFilters.priceMin)
+          : null,
+        maxPrice: activeFilters.priceMax
+          ? parseFloat(activeFilters.priceMax)
+          : null,
+        currency: activeFilters.currency || null,
+        watchInfo: activeFilters.extraInfo || null,
+      };
+      fetchedResults = await searchWatches(payload, user.userId);
+    } else {
+      if (!activeFilters.reference) return [];
+      fetchedResults = await getWatchByReference(
+        activeFilters.reference,
+        user.userId
+      );
+    }
+    return fetchedResults;
   };
 
   const handleSearch = async (e) => {
-    e.preventDefault();
+    e?.preventDefault?.();
     if (!Object.values(filters).some((val) => val)) return;
 
     try {
-      let fetchedResults = [];
+      setLoading(true);
+      const fetchedResults = await runSearch(filters);
 
-      if (showAdvancedEnabled && showAdvanced) {
-        const payload = {
-          referenceCode: filters.reference,
-          colorDial: filters.color,
-          productionYear: filters.year ? parseInt(filters.year) : null,
-          watchCondition: filters.condition,
-          minPrice: filters.priceMin ? parseFloat(filters.priceMin) : null,
-          maxPrice: filters.priceMax ? parseFloat(filters.priceMax) : null,
-          currency: filters.currency || null,
-          watchInfo: filters.extraInfo || null,
-        };
-        fetchedResults = await searchWatches(payload, user.userId);
-      } else {
-        if (!filters.reference) return;
-        fetchedResults = await getWatchByReference(
-          filters.reference,
-          user.userId
-        );
-      }
-
-      // ✅ Resetear límite si fue exitosa
       setLimitExceeded(false);
-
-      // Guardar en historial si aplica
       if (searchHistoryLimit > 0) {
-        saveSearchToHistory(filters, searchHistoryLimit);
+        const toSave = { ...filters };
+        delete toSave.adv; // no guardar adv en historial
+        saveSearchToHistory(toSave, searchHistoryLimit);
         setHistoryRefreshToggle((prev) => !prev);
       }
 
@@ -123,24 +183,23 @@ export default function Search() {
     } catch (err) {
       console.error("Search error:", err);
       const errorMsg = err?.data?.error || "";
-
       if (errorMsg.includes("ERR01")) {
         setLimitExceeded(true);
         setShowModal(false);
         return;
       }
-
       setLimitExceeded(false);
       setResults([]);
       setShowModal(true);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleRepeatSearch = async (prevFilters) => {
-    setFilters(prevFilters);
+    setFilters(prevFilters); // también actualizará la URL
     try {
-      let fetchedResults = [];
-
+      setLoading(true);
       const isAdvanced =
         showAdvancedEnabled &&
         (prevFilters.color?.length ||
@@ -151,49 +210,28 @@ export default function Search() {
           prevFilters.currency?.length ||
           prevFilters.extraInfo?.length);
 
-      if (isAdvanced) {
-        setShowAdvanced(true);
-        const payload = {
-          referenceCode: prevFilters.reference,
-          colorDial: prevFilters.color,
-          productionYear: prevFilters.year ? parseInt(prevFilters.year) : null,
-          watchCondition: prevFilters.condition,
-          minPrice: prevFilters.priceMin
-            ? parseFloat(prevFilters.priceMin)
-            : null,
-          maxPrice: prevFilters.priceMax
-            ? parseFloat(prevFilters.priceMax)
-            : null,
-          currency: prevFilters.currency || null,
-          watchInfo: prevFilters.extraInfo || null,
-        };
-        fetchedResults = await searchWatches(payload, user.userId);
-      } else {
-        setShowAdvanced(false);
-        if (!prevFilters.reference) return;
-        fetchedResults = await getWatchByReference(
-          prevFilters.reference,
-          user.userId
-        );
-      }
+      setShowAdvanced(Boolean(isAdvanced));
+      const fetchedResults = await runSearch({
+        ...prevFilters,
+        adv: undefined,
+      });
 
-      // ✅ Resetear límite si fue exitosa
       setLimitExceeded(false);
       setResults(fetchedResults);
       setShowModal(true);
     } catch (err) {
       console.error("Search error:", err);
       const errorMsg = err?.data?.error || "";
-
       if (errorMsg.includes("ERR01")) {
         setLimitExceeded(true);
         setShowModal(false);
         return;
       }
-
       setLimitExceeded(false);
       setResults([]);
       setShowModal(true);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -202,7 +240,6 @@ export default function Search() {
       <Helmet>
         <title>Search Watches - Rollie</title>
       </Helmet>
-
       <Container className="mt-4">
         <div className="text-center mb-4">
           <h2 className="fw-semibold">Explore the Market</h2>
@@ -226,74 +263,53 @@ export default function Search() {
 
         <Form onSubmit={handleSearch}>
           <Card className="p-4 shadow-sm border-0">
-            <Row className="g-3 align-items-end">
-              <Col md={6}>
-                <Form.Group controlId="reference">
-                  <Form.Label>Reference Number</Form.Label>
-                  <div className="position-relative">
-                    <Form.Control
-                      type="text"
-                      name="reference"
-                      value={filters.reference}
-                      onChange={handleChange}
-                      placeholder="e.g. 126610LN"
-                      autoComplete="off"
-                    />
-                    {autocompleteEnabled &&
-                      isTyping &&
-                      referenceSuggestions.length > 0 && (
-                        <div
-                          className="position-absolute bg-white border rounded shadow-sm mt-1 w-100 z-3"
-                          style={{ maxHeight: "200px", overflowY: "auto" }}
-                        >
-                          {referenceSuggestions.map((suggestion, idx) => (
-                            <div
-                              key={idx}
-                              className="px-3 py-2 hover-bg-light text-muted"
-                              style={{ cursor: "pointer" }}
-                              onClick={() => {
-                                setFilters((prev) => ({
-                                  ...prev,
-                                  reference: suggestion,
-                                }));
-                                setReferenceSuggestions([]);
-                                setIsTyping(false);
-                              }}
-                            >
-                              {suggestion}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                  </div>
-                </Form.Group>
-              </Col>
-              <Col md={6} className="d-flex justify-content-end">
-                {showAdvancedEnabled && (
-                  <Button
-                    variant="outline-secondary"
-                    className="me-2"
-                    onClick={() => setShowAdvanced(!showAdvanced)}
-                  >
-                    {showAdvanced ? (
-                      <>
-                        <FaTimesCircle className="me-1" /> Hide Filters
-                      </>
-                    ) : (
-                      <>
-                        <FaSearch className="me-1" /> Advanced
-                      </>
-                    )}
-                  </Button>
-                )}
-                <Button type="submit" variant="dark">
-                  <FaSearch className="me-1" /> Search
+            {/* fila principal del form con skeletons y autocomplete */}
+            <SearchForm
+              filters={filters}
+              setFilters={setFilters}
+              onSubmit={handleSearch}
+              loading={loading}
+              showAdvancedEnabled={showAdvancedEnabled}
+              showAdvanced={showAdvanced}
+              setShowAdvanced={setShowAdvanced}
+              autocompleteEnabled={autocompleteEnabled}
+              suggestions={referenceSuggestions}
+              suggestionsOpen={suggestionsOpen}
+              suggestionsLoading={suggestionsLoading}
+              onPickSuggestion={onPickSuggestion}
+            />
+
+            <ActiveFilterChips filters={filters} setFilters={setFilters} />
+
+            {showAdvanced && (
+              <AdvancedFilters
+                filters={filters}
+                handleChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    [e.target.name]: e.target.value,
+                  }))
+                }
+              />
+            )}
+
+            {/* botones utilitarios */}
+            <Row className="mt-3">
+              <Col className="d-flex gap-2 justify-content-end">
+                <Button
+                  variant="outline-secondary"
+                  onClick={() => {
+                    setFilters(DEFAULT_FILTERS);
+                    setShowAdvanced(false);
+                    setReferenceSuggestions([]);
+                    setSuggestionsOpen(false);
+                  }}
+                  disabled={loading}
+                >
+                  Clear
                 </Button>
               </Col>
             </Row>
-            {showAdvanced && (
-              <AdvancedFilters filters={filters} handleChange={handleChange} />
-            )}
           </Card>
         </Form>
       </Container>
@@ -303,7 +319,7 @@ export default function Search() {
           onSearchRepeat={handleRepeatSearch}
           refreshToggle={historyRefreshToggle}
           onClear={() => setHistoryRefreshToggle(!historyRefreshToggle)}
-          searchHistoryLimit={searchHistoryLimit} // 👈 aquí
+          searchHistoryLimit={searchHistoryLimit}
         />
       )}
 
@@ -311,7 +327,12 @@ export default function Search() {
         show={showModal && !limitExceeded}
         onHide={() => setShowModal(false)}
         results={results}
+        loading={loading}
       />
+
+      {/* Comparador */}
+      <CompareButton />
+      <CompareDrawer />
     </PageTransition>
   );
 }

@@ -1,0 +1,82 @@
+/* Ancho casi full-screen y límites cómodos */
+.compare-offcanvas {
+    --bs-offcanvas-width: min(96vw, 1400px) !important;
+}
+
+/* Wrapper con scroll horizontal suave para tabla ancha */
+.compare-table-wrapper {
+    width: 100%;
+    overflow: auto;
+    padding-bottom: 8px;
+}
+
+/* Tabla agradable y legible */
+.compare-table th,
+.compare-table td {
+    white-space: nowrap;
+    vertical-align: middle;
+    padding: 12px 16px;
+}
+
+.compare-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--bs-body-bg);
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+/* Primera columna fija */
+.compare-table .sticky-col {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: var(--bs-body-bg);
+    box-shadow: 1px 0 0 var(--bs-border-color);
+    font-weight: 600;
+}
+
+/* Resaltados (mejor valor) */
+.hl-good {
+    background: rgba(0, 200, 83, 0.12);
+    /* verde suave */
+}
+
+/* Grid de tarjetas */
+.compare-grid .compare-card {
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.compare-grid .compare-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .08);
+}
+
+/* Empty state centrado */
+.compare-empty {
+    height: calc(100vh - 160px);
+    display: grid;
+    place-items: center;
+}
+
+.compare-empty-inner {
+    text-align: center;
+}
+
+.compare-empty-icon {
+    width: 64px;
+    height: 64px;
+    line-height: 64px;
+    font-size: 28px;
+    border-radius: 9999px;
+    background: var(--bs-secondary-bg);
+    display: inline-block;
+    color: var(--bs-secondary-color);
+}
+
+/* Responsive: en móviles, usa todo el ancho */
+@media (max-width: 768px) {
+    .compare-offcanvas {
+        --bs-offcanvas-width: 100vw;
+    }
+}
