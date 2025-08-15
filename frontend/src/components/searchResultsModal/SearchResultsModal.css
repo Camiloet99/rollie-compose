@@ -163,3 +163,56 @@
         padding-bottom: 4px;
     }
 }
+
+/* ============================
+   Price Tier Badges (low/mid/high)
+   Consistentes con Bootstrap 5.3
+   ============================ */
+
+/* Base del badge de tier */
+.tier-badge {
+    border-radius: 999px;
+    /* píldora */
+    font-weight: 600;
+    letter-spacing: .02em;
+    padding: .25rem .5rem;
+    /* similar a badge sm */
+    border: 1px solid transparent;
+    /* lo ajustamos por tier */
+    line-height: 1.1;
+}
+
+/* LOW = usa variables de SUCCESS */
+.tier-low {
+    background-color: var(--bs-success-bg-subtle) !important;
+    color: var(--bs-success-text-emphasis) !important;
+    border-color: var(--bs-success-border-subtle) !important;
+}
+
+/* MID = usa variables de SECONDARY */
+.tier-mid {
+    background-color: var(--bs-secondary-bg-subtle) !important;
+    color: var(--bs-secondary-text-emphasis) !important;
+    border-color: var(--bs-secondary-border-subtle) !important;
+}
+
+/* HIGH = usa variables de WARNING */
+.tier-high {
+    background-color: var(--bs-warning-bg-subtle) !important;
+    color: var(--bs-warning-text-emphasis) !important;
+    border-color: var(--bs-warning-border-subtle) !important;
+}
+
+/* Hover/focus sutil para accesibilidad */
+.tier-badge:hover,
+.tier-badge:focus {
+    filter: brightness(0.98);
+    outline: none;
+    box-shadow: 0 0 0 .15rem rgba(0, 0, 0, 0.04);
+}
+
+/* Para Safari/Firefox que a veces apretan el texto de badges */
+.tier-badge {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}

@@ -7,6 +7,8 @@ import WatchCard from "./WatchCard";
 import WatchCardSkeleton from "./WatchCardSkeleton";
 import { useFavoritesOptimistic } from "../../hooks/useFavoritesOptimistic";
 import "./SearchResultsModal.css";
+import { onlyUSD } from "../../utils/currency";
+import usePriceBuckets from "../../hooks/usePriceBuckets";
 
 export default function SearchResultsModal({
   show,
@@ -31,10 +33,23 @@ export default function SearchResultsModal({
     return Array.from(set);
   }, [results]);
 
-  // ORDEN
+  // Filtrar solo USD
+  const usdResults = useMemo(
+    () => onlyUSD(filteredResults ?? []),
+    [filteredResults]
+  );
+
+  // Clasificación de precios
+  const { classify } = usePriceBuckets(usdResults, {
+    method: "quantile",
+    byReference: true,
+    minGroup: 12,
+  });
+
+  // Orden
   const [sort, setSort] = useState("price_desc");
   const sortedResults = useMemo(() => {
-    const arr = [...filteredResults];
+    const arr = [...usdResults];
     const num = (x) =>
       x === null || x === undefined || x === "" ? NaN : Number(x);
     switch (sort) {
@@ -53,7 +68,7 @@ export default function SearchResultsModal({
       default:
         return arr;
     }
-  }, [filteredResults, sort]);
+  }, [usdResults, sort]);
 
   return (
     <Modal show={show} onHide={onHide} size="xl" centered scrollable>
@@ -64,7 +79,6 @@ export default function SearchResultsModal({
       <Modal.Body className="pt-0">
         {!loading && results.length > 0 && (
           <div className="filter-row-sticky">
-            {/* Toolbar superior: Sort + contador */}
             <div className="results-toolbar d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
               <div className="d-flex align-items-center gap-2 flex-wrap">
                 <Form.Select
@@ -82,7 +96,6 @@ export default function SearchResultsModal({
               </div>
             </div>
 
-            {/* Bloque de filtros */}
             <div className="filters-section">
               <FiltersRow
                 colorFilter={colorFilter}
@@ -106,7 +119,6 @@ export default function SearchResultsModal({
           </div>
         )}
 
-        {/* Contenido principal */}
         {loading ? (
           <div>
             {Array.from({ length: 8 }).map((_, i) => (
@@ -124,6 +136,7 @@ export default function SearchResultsModal({
                   `${watch.referenceCode}-${watch.createdAt ?? Math.random()}`
                 }
                 watch={watch}
+                priceTier={classify(watch)}
               />
             ))}
           </div>

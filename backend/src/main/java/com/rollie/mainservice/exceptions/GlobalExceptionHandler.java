@@ -17,6 +17,13 @@ public class GlobalExceptionHandler {
         return Mono.just(buildResponse(ex.getMessage(), HttpStatus.CONFLICT));
     }
 
+    @ExceptionHandler(Throwable.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public Mono<ResponseEntity<ResponseBody<String>>> handleThrowable(Throwable ex) {
+        return Mono.just(buildResponse(ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR));
+    }
+
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public Mono<ResponseEntity<ResponseBody<String>>> handleServerError(Exception ex) {
@@ -24,12 +31,17 @@ public class GlobalExceptionHandler {
     }
 
     public static <T> ResponseEntity<ResponseBody<T>> buildResponse(T result, HttpStatus status) {
+        String errorMsg = (result == null || String.valueOf(result).isBlank())
+                ? status.getReasonPhrase()
+                : String.valueOf(result);
+
         ResponseBody<T> orb = ResponseBody
                 .<T>builder()
                 .status(status.value())
-                .error(result.toString())
+                .error(errorMsg)
                 .build();
 
         return ResponseEntity.status(status).body(orb);
     }
+
 }

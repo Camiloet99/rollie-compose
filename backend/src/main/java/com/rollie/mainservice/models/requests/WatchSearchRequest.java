@@ -19,5 +19,5 @@ public class WatchSearchRequest {
     private Double maxPrice;
     private String currency;
     private String watchInfo;
+    private Boolean lastDayOnly;
 }
-

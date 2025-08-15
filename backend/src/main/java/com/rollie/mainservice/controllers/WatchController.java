@@ -51,7 +51,8 @@ public class WatchController {
                         request.getMinPrice(),
                         request.getMaxPrice(),
                         request.getCurrency(),
-                        request.getWatchInfo()
+                        request.getWatchInfo(),
+                        request.getLastDayOnly()
                 ))
                 .flatMap(results -> Mono.defer(() ->
                         searchService.logSearch(userId, request.getReferenceCode())

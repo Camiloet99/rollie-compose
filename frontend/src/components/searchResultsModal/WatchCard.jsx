@@ -16,18 +16,35 @@ const renderBadges = (text, variant, uppercase = false) => {
     ));
 };
 
-export default function WatchCard({ watch }) {
+// Reemplaza TU TierBadge por este:
+function TierBadge({ tier }) {
+  if (!tier) return null;
+  const label = tier.toUpperCase(); // LOW | MID | HIGH
+  return (
+    <Badge
+      bg="light"
+      className={`tier-badge tier-${tier}`}
+      title={`Price tier: ${label}`}
+    >
+      {label}
+    </Badge>
+  );
+}
+
+export default function WatchCard({ watch, priceTier }) {
   return (
     <Card
       className="mb-3 shadow-sm border-0 rounded-4 p-3 position-relative"
       style={{ background: "#ffffff" }}
     >
-      {/* Toggle para agregar/quitar al comparador */}
       <CompareToggle watch={watch} />
 
       <Row>
         <Col md={6} className="d-flex flex-column justify-content-center">
-          <h5 className="fw-bold mb-2">{watch.referenceCode}</h5>
+          <div className="d-flex align-items-center justify-content-between">
+            <h5 className="fw-bold mb-2">{watch.referenceCode}</h5>
+            <TierBadge tier={priceTier} />
+          </div>
 
           <div className="mb-1 text-muted small">
             <strong>Production Year:</strong>{" "}
@@ -69,8 +86,9 @@ export default function WatchCard({ watch }) {
             </div>
           )}
 
+          {/* Forzar USD en la vista */}
           <div className="fw-semibold fs-5 text-success mb-1">
-            {formatPrice(watch.cost, watch.currency)}
+            {formatPrice(watch.cost, "USD")}
           </div>
         </Col>
 

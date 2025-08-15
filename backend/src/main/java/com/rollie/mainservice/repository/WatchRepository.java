@@ -23,14 +23,9 @@ public interface WatchRepository extends R2dbcRepository<WatchEntity, Long> {
     @Query("SELECT * FROM watches WHERE reference_code LIKE CONCAT(:prefix, '%') LIMIT 10")
     Flux<WatchEntity> findByReferenceCodeStartingWith(@Param("prefix") String prefix);
 
-    @Query("SELECT * FROM watches WHERE reference_code IN (:references) AND created_at >= :fromDate")
-    Flux<WatchEntity> findByReferenceCodeInSince(@Param("references") Collection<String> references, @Param("fromDate") LocalDateTime fromDate);
-
     Flux<WatchEntity> findByReferenceCode(String referenceCode);
 
-    @Query("SELECT * FROM watches WHERE reference_code LIKE CONCAT('%', :referenceCode, '%') AND created_at >= :fromDate")
-    Flux<WatchEntity> findByReferenceAndCreatedAtSince(@Param("referenceCode") String referenceCode, @Param("fromDate") LocalDateTime fromDate);
-
-
+    @Query("SELECT * FROM watches WHERE reference_code IN (:references)")
+    Flux<WatchEntity> findByReferenceCodeIn(@Param("references") Collection<String> references);
 
 }

@@ -37,20 +37,92 @@ public class WatchService {
             Double minPrice,
             Double maxPrice,
             String currency,
-            String watchInfo) {
+            String watchInfo,
+            Boolean lastDayOnly) {
 
-        LocalDate today = LocalDate.now();
-        LocalDateTime startOfToday = today.atStartOfDay();
-        LocalDateTime startOfYesterday = today.minusDays(1).atStartOfDay();
+        if (Boolean.TRUE.equals(lastDayOnly)) {
+            LocalDate today = LocalDate.now();
+            LocalDateTime startOfToday = today.atStartOfDay();
+            LocalDateTime startOfYesterday = today.minusDays(1).atStartOfDay();
 
-        return executeSearch(referenceCode, colorDial, productionYear, condition, minPrice, maxPrice, currency, watchInfo, startOfToday)
-                .flatMap(todayResults -> {
-                    if (!todayResults.isEmpty()) {
-                        return Mono.just(todayResults);
-                    } else {
-                        return executeSearch(referenceCode, colorDial, productionYear, condition, minPrice, maxPrice, currency, watchInfo, startOfYesterday);
-                    }
-                });
+            return executeSearch(referenceCode, colorDial, productionYear, condition,
+                    minPrice, maxPrice, currency, watchInfo, startOfToday)
+                    .flatMap(todayResults -> {
+                        if (!todayResults.isEmpty()) {
+                            return Mono.just(todayResults);
+                        } else {
+                            return executeSearch(referenceCode, colorDial, productionYear, condition,
+                                    minPrice, maxPrice, currency, watchInfo, startOfYesterday);
+                        }
+                    });
+        }
+
+        // nuevo comportamiento por defecto: sin filtro de fecha
+        return executeSearchNoDate(referenceCode, colorDial, productionYear, condition,
+                minPrice, maxPrice, currency, watchInfo)
+                .flatMap(this::applyMarkup);
+    }
+
+    private Mono<List<WatchEntity>> executeSearchNoDate(
+            String referenceCode, String colorDial, Integer year,
+            String condition, Double minPrice, Double maxPrice,
+            String currency, String watchInfo) {
+
+        StringBuilder sql = new StringBuilder("SELECT * FROM watches WHERE 1=1");
+
+        if (referenceCode != null && !referenceCode.trim().isEmpty()) {
+            sql.append(" AND reference_code = :referenceCode");
+        }
+        if (colorDial != null && !colorDial.trim().isEmpty()) {
+            sql.append(" AND color_dial = :colorDial");
+        }
+        if (year != null) {
+            sql.append(" AND production_year = :year");
+        }
+        if (condition != null && !condition.trim().isEmpty()) {
+            sql.append(" AND watch_condition = :condition");
+        }
+        if (minPrice != null) {
+            sql.append(" AND cost >= :minPrice");
+        }
+        if (maxPrice != null) {
+            sql.append(" AND cost <= :maxPrice");
+        }
+        if (currency != null && !currency.trim().isEmpty()) {
+            sql.append(" AND currency = :currency");
+        }
+        if (watchInfo != null && !watchInfo.trim().isEmpty()) {
+            sql.append(" AND watch_info LIKE :watchInfo");
+        }
+
+        var spec = databaseClient.sql(sql.toString())
+                .filter((statement, next) -> { statement.fetchSize(1000); return next.execute(statement); });
+
+        if (referenceCode != null && !referenceCode.trim().isEmpty()) spec = spec.bind("referenceCode", referenceCode);
+        if (colorDial != null && !colorDial.trim().isEmpty()) spec = spec.bind("colorDial", colorDial);
+        if (year != null) spec = spec.bind("year", year);
+        if (condition != null && !condition.trim().isEmpty()) spec = spec.bind("condition", condition);
+        if (minPrice != null) spec = spec.bind("minPrice", minPrice);
+        if (maxPrice != null) spec = spec.bind("maxPrice", maxPrice);
+        if (currency != null && !currency.trim().isEmpty()) spec = spec.bind("currency", currency.trim().toUpperCase());
+        if (watchInfo != null && !watchInfo.trim().isEmpty()) spec = spec.bind("watchInfo", "%" + watchInfo + "%");
+
+        return spec.map((row, meta) -> mapRowToWatch(row))
+                .all()
+                .collectList()
+                .flatMap(this::applyMarkup);
+    }
+
+    public Mono<List<WatchEntity>> getWatchByReference(String reference) {
+        return watchRepository.findByReferenceCode(reference)
+                .collectList()
+                .flatMap(this::applyMarkup);
+    }
+
+    public Mono<List<WatchEntity>> getWatchesByReferences(List<String> references) {
+        return watchRepository.findByReferenceCodeIn(references)
+                .collectList()
+                .flatMap(this::applyMarkup);
     }
 
     private Mono<List<WatchEntity>> executeSearch(String referenceCode, String colorDial, Integer year,
@@ -156,19 +228,6 @@ public class WatchService {
                 .map(WatchEntity::getReferenceCode)
                 .distinct()
                 .collectList();
-    }
-
-    public Mono<List<WatchEntity>> getWatchByReference(String reference) {
-        return getLatestWatchData((fromDate) ->
-                watchRepository.findByReferenceAndCreatedAtSince(reference, fromDate))
-                .flatMap(this::applyMarkup);
-
-    }
-
-    public Mono<List<WatchEntity>> getWatchesByReferences(List<String> references) {
-        return getLatestWatchData(fromDate ->
-                watchRepository.findByReferenceCodeInSince(references, fromDate))
-                .flatMap(this::applyMarkup);
     }
 
     public Mono<WatchReferenceSummaryResponse> getWatchSummaryByReference(String reference) {
