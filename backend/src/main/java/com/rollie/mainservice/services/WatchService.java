@@ -93,15 +93,16 @@ public class WatchService {
     }
 
     public Mono<List<String>> autocompleteReference(String prefix) {
-        return getLatestAsOfDate()
-                .flatMap(latest ->
-                        watchRepository.findByReferenceCodeStartingWith(prefix)
-                                .filter(w -> latest.equals(w.getAsOfDate()))
-                                .map(WatchEntity::getReferenceCode)
-                                .distinct()
-                                .collectList()
-                )
-                .switchIfEmpty(Mono.just(List.of()));
+        if (prefix == null || prefix.isBlank()) return Mono.just(List.of());
+        String cleaned = escapeLike(prefix.trim());
+        int limit = 15;
+        return watchRepository.autocompleteLatestRefs(cleaned, limit).collectList();
+    }
+
+    private String escapeLike(String s) {
+        return s.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 
     public Mono<WatchReferenceSummaryResponse> getWatchSummaryByReference(String reference) {
@@ -231,7 +232,10 @@ public class WatchService {
         if (currency != null && !currency.trim().isEmpty()) spec = spec.bind("currency", currency.trim().toUpperCase());
         if (watchInfo != null && !watchInfo.trim().isEmpty()) spec = spec.bind("watchInfo", "%" + watchInfo + "%");
 
-        spec = spec.filter((statement, next) -> { statement.fetchSize(1000); return next.execute(statement); });
+        spec = spec.filter((statement, next) -> {
+            statement.fetchSize(1000);
+            return next.execute(statement);
+        });
 
         return spec.map(this::mapRowToWatch)
                 .all()
