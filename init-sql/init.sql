@@ -5,28 +5,29 @@ CREATE DATABASE IF NOT EXISTS rollie CHARACTER SET utf8mb4 COLLATE utf8mb4_unico
 USE rollie;
 
 -- Tabla de configuración de aplicación
-CREATE TABLE app_config (
+CREATE TABLE IF NOT EXISTS app_config (
     id VARCHAR(255) PRIMARY KEY,
     config_key VARCHAR(255) NOT NULL,
     value TEXT
 );
 
 -- Tabla de entradas de documentos
-CREATE TABLE document_entries (
+CREATE TABLE IF NOT EXISTS document_entries (
     id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     content TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Tabla de logs de carga de documentos
-CREATE TABLE document_upload_log (
+CREATE TABLE IF NOT EXISTS document_upload_log (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     filename VARCHAR(255) NOT NULL,
-    upload_time DATETIME NOT NULL
+    upload_time DATETIME NOT NULL,
+    as_of_date DATE NOT NULL
 );
 
 -- Tabla de logs de búsqueda
-CREATE TABLE search_logs (
+CREATE TABLE IF NOT EXISTS search_logs (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     user_id BIGINT,
     timestamp DATETIME,
@@ -36,7 +37,7 @@ CREATE TABLE search_logs (
 );
 
 -- Tabla de planes o tiers
-CREATE TABLE tiers (
+CREATE TABLE IF NOT EXISTS tiers (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(255),
     description TEXT,
@@ -52,20 +53,20 @@ CREATE TABLE tiers (
 );
 
 -- Tabla de usuarios
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     user_id BIGINT PRIMARY KEY AUTO_INCREMENT,
     first_name VARCHAR(100),
     last_name VARCHAR(100),
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
-    role VARCHAR(50),
+    role VARCHAR(50) DEFAULT 'USER',
     planId INT,
     phone VARCHAR(20),
     active TINYINT(1) DEFAULT 1
 );
 
 -- Tabla de relojes
-CREATE TABLE watches (
+CREATE TABLE IF NOT EXISTS watches (
     id INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     reference_code VARCHAR(50) NOT NULL,
     color_dial VARCHAR(50),
@@ -74,11 +75,12 @@ CREATE TABLE watches (
     cost DECIMAL(20,2),
     currency VARCHAR(10),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    watch_info VARCHAR(60)
+    watch_info VARCHAR(60),
+    as_of_date DATE NOT NULL
 );
 
 -- Tabla de favoritos
-CREATE TABLE user_favorites (
+CREATE TABLE IF NOT EXISTS user_favorites (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     user_id BIGINT NOT NULL,
     reference VARCHAR(100) NOT NULL,

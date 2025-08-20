@@ -8,6 +8,15 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+import lombok.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Column;
+import org.springframework.data.relational.core.mapping.Table;
+
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -24,4 +33,7 @@ public class DocumentUploadLog {
 
     @Column("upload_time")
     private LocalDateTime uploadTime;
+
+    @Column("as_of_date")
+    private LocalDate asOfDate;
 }

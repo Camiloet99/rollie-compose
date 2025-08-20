@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, SmallInteger, DECIMAL, DateTime, func
+from sqlalchemy import Column, Integer, String, SmallInteger, DECIMAL, DateTime, func, Date
 from database import Base
 
 class Watch(Base):
@@ -13,3 +13,4 @@ class Watch(Base):
     currency = Column(String(10))
     created_at = Column(DateTime, server_default=func.now())
     watch_info = Column(String(55))
+    as_of_date = Column(Date, index=True, nullable=False)

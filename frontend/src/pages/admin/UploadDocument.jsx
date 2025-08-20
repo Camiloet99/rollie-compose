@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Helmet } from "react-helmet";
 import {
   Form,
@@ -31,6 +31,10 @@ export default function UploadDocument() {
   const [markup, setMarkup] = useState(0);
   const [markupLoading, setMarkupLoading] = useState(true);
   const [updatingMarkup, setUpdatingMarkup] = useState(false);
+
+  // NEW: fecha de referencia ("as of")
+  const todayStr = useMemo(() => dayjs().format("YYYY-MM-DD"), []);
+  const [asOfDate, setAsOfDate] = useState(todayStr);
 
   const fetchMarkup = async () => {
     setMarkupLoading(true);
@@ -81,24 +85,24 @@ export default function UploadDocument() {
       return;
     }
 
+    if (!asOfDate || dayjs(asOfDate).isAfter(dayjs(), "day")) {
+      toast.error("Please choose a valid date (today or in the past).");
+      return;
+    }
+
     setLoading(true);
     try {
-      await uploadDocument(file);
+      await uploadDocument(file, asOfDate);
       toast.success("File uploaded successfully.");
       setFile(null);
-      fetchLogs(); // refresh logs
+      setAsOfDate(todayStr); // opcional: resetear a hoy
+      fetchLogs();
     } catch (error) {
       toast.error("Upload failed. Please try again.");
     } finally {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (user && user.role === "ADMIN") {
-      fetchLogs();
-    }
-  }, [user]);
 
   useEffect(() => {
     if (user && user.role === "ADMIN") {
@@ -147,6 +151,25 @@ export default function UploadDocument() {
               <Form.Text muted>Only .xlsx format is supported.</Form.Text>
             </Form.Group>
 
+            {/* NEW: fecha a la que corresponden los datos */}
+            <Form.Group controlId="formAsOfDate" className="mb-3">
+              <Form.Label className="fw-semibold">
+                ¿A qué fecha corresponden estos datos?
+              </Form.Label>
+              <Form.Control
+                type="date"
+                // permitir solo hoy o pasado
+                max={todayStr}
+                value={asOfDate}
+                onChange={(e) => setAsOfDate(e.target.value)}
+                disabled={loading}
+                required
+              />
+              <Form.Text muted>
+                Solo se permite seleccionar hoy o días anteriores.
+              </Form.Text>
+            </Form.Group>
+
             <Button
               type="submit"
               variant="dark"
@@ -160,9 +183,16 @@ export default function UploadDocument() {
             </Button>
           </Form>
 
-          {file && (
+          {(file || asOfDate) && (
             <Alert variant="info" className="mt-3 text-center small mb-0">
-              Selected file: <strong>{file.name}</strong>
+              {file && (
+                <>
+                  Selected file: <strong>{file.name}</strong>
+                  <br />
+                </>
+              )}
+              Data as of:{" "}
+              <strong>{dayjs(asOfDate).format("YYYY-MM-DD")}</strong>
             </Alert>
           )}
         </Card>
@@ -222,6 +252,7 @@ export default function UploadDocument() {
                 <thead className="table-light">
                   <tr>
                     <th>Filename</th>
+                    <th>Data As Of</th> {/* NEW */}
                     <th>Upload Time</th>
                   </tr>
                 </thead>
@@ -229,6 +260,11 @@ export default function UploadDocument() {
                   {logs.map((log, index) => (
                     <tr key={index}>
                       <td>{log.filename}</td>
+                      <td>
+                        {log.asOfDate
+                          ? dayjs(log.asOfDate).format("YYYY-MM-DD")
+                          : "—"}
+                      </td>
                       <td>
                         {dayjs(log.uploadTime).format("YYYY-MM-DD HH:mm:ss")}
                       </td>

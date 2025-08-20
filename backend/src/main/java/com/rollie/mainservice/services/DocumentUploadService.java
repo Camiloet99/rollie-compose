@@ -16,7 +16,9 @@ import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 @Service
@@ -37,12 +39,12 @@ public class DocumentUploadService {
     }
 
     public Mono<List<DocumentUploadLog>> getAllUploadLogs() {
-        return logRepository.findAll().collectList();
+        return logRepository.findAllByOrderByUploadTimeDesc().collectList();
     }
 
-    public Mono<Object> forwardFileToPythonBackend(FilePart filePart) {
-        String filename = filePart.filename();
-        LocalDateTime now = LocalDateTime.now();
+    public Mono<Object> forwardFileToPythonBackend(FilePart filePart, LocalDate asOfDate, ZoneId zoneId) {
+        String filename = sanitizeFilename(filePart.filename());
+        LocalDateTime now = LocalDateTime.now(zoneId);
 
         return DataBufferUtils.join(filePart.content())
                 .flatMap(dataBuffer -> {
@@ -59,8 +61,9 @@ public class DocumentUploadService {
 
                     MultipartBodyBuilder builder = new MultipartBodyBuilder();
                     builder.part("file", resource)
-                            .header("Content-Disposition",
-                                    "form-data; name=file; filename=" + filename);
+                            .filename(filename)
+                            .contentType(MediaType.APPLICATION_OCTET_STREAM);
+                    builder.part("asOfDate", asOfDate.toString());
 
                     return webClient.post()
                             .uri("/clean-watches/")
@@ -72,9 +75,18 @@ public class DocumentUploadService {
                                 DocumentUploadLog log = DocumentUploadLog.builder()
                                         .filename(filename)
                                         .uploadTime(now)
+                                        .asOfDate(asOfDate) // NEW
                                         .build();
                                 return logRepository.save(log).thenReturn(result);
                             });
                 });
+    }
+
+    private String sanitizeFilename(String raw) {
+        String cleaned = (raw == null || raw.isBlank()) ? "upload.xlsx" : raw;
+        cleaned = cleaned.replace("\\", "/");
+        int slash = cleaned.lastIndexOf('/');
+        if (slash >= 0) cleaned = cleaned.substring(slash + 1);
+        return cleaned;
     }
 }

@@ -2,9 +2,10 @@
 import api from './api';
 
 // Subir un documento Excel
-export const uploadDocument = async (file) => {
+export const uploadDocument = async (file, asOfDate) => {
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("asOfDate", asOfDate); 
 
   try {
     const res = await api.post("/admin/documents/upload", formData, {
