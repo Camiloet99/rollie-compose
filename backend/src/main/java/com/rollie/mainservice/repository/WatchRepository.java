@@ -20,8 +20,12 @@ public interface WatchRepository extends R2dbcRepository<WatchEntity, Long> {
             @Param("fromDate") LocalDateTime fromDate
     );
 
-    @Query("SELECT DISTINCT reference_code FROM watches WHERE as_of_date = (SELECT MAX(as_of_date) FROM document_upload_log) " +
-            "AND UPPER(reference_code) LIKE CONCAT(UPPER(:prefix), '%') ESCAPE ORDER BY reference_code LIMIT :limit")
+    @Query("SELECT DISTINCT reference_code " +
+            "FROM watches " +
+            "WHERE as_of_date = (SELECT MAX(as_of_date) FROM document_upload_log) " +
+            "  AND UPPER(reference_code) LIKE CONCAT(UPPER(:prefix), '%') " +
+            "ORDER BY reference_code " +
+            "LIMIT :limit")
     Flux<String> autocompleteLatestRefs(@Param("prefix") String prefix, @Param("limit") int limit);
 
     Flux<WatchEntity> findByReferenceCode(String referenceCode);

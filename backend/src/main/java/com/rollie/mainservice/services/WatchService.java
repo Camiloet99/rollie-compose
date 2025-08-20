@@ -92,9 +92,9 @@ public class WatchService {
                 .collectList();
     }
 
-    public Mono<List<String>> autocompleteReference(String prefix) {
-        if (prefix == null || prefix.isBlank()) return Mono.just(List.of());
-        String cleaned = escapeLike(prefix.trim());
+    public reactor.core.publisher.Mono<java.util.List<String>> autocompleteReference(String prefix) {
+        if (prefix == null || prefix.isBlank()) return reactor.core.publisher.Mono.just(java.util.List.of());
+        String cleaned = escapeLike(prefix.trim());   // opcional pero recomendado
         int limit = 15;
         return watchRepository.autocompleteLatestRefs(cleaned, limit).collectList();
     }
@@ -104,7 +104,7 @@ public class WatchService {
                 .replace("%", "\\%")
                 .replace("_", "\\_");
     }
-
+    
     public Mono<WatchReferenceSummaryResponse> getWatchSummaryByReference(String reference) {
         return getLatestAsOfDate()
                 .flatMap(latest ->
