@@ -35,9 +35,6 @@ async def clean_watches(
     except ValueError:
         raise HTTPException(status_code=400, detail="asOfDate must be YYYY-MM-DD")
 
-    if as_of > date.today(TZ):
-        raise HTTPException(status_code=400, detail="asOfDate cannot be in the future")
-
     # 2) Guardar temporal y limpiar con tu pipeline
     os.makedirs("uploads", exist_ok=True)
     temp_path = f"uploads/{file.filename}"
