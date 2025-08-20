@@ -8,6 +8,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -42,5 +43,8 @@ public class WatchEntity {
 
     @Column("watch_info")
     private String extraInfo;
+
+    @Column("as_of_date")
+    private LocalDate asOfDate;
 
 }
