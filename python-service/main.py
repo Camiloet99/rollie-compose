@@ -49,36 +49,32 @@ async def clean_watches(
     # 3) Insertar en DB incluyendo as_of_date
     errors = []
     success_count = 0
-    MAX_COST_ALLOWED = 30_000_000
-    MAX_REF_LENGTH = 50
+    MAX_COST_ALLOWED = 1_000_000_000
 
     for index, row in df_cleaned.iterrows():
         try:
+            # parseo de precio más robusto que .isdigit()
             raw_price = row.get("Price")
-            price_float = parse_price_safe(raw_price)
-            if price_float is not None and price_float > MAX_COST_ALLOWED:
+            price_float = float(raw_price) if raw_price and str(raw_price).isdigit() else None
+            if price_float and price_float > MAX_COST_ALLOWED:
                 raise ValueError(f"Cost too large: {price_float}")
 
-            ref = (row.get('Reference') or '').strip()
-            if not ref or len(ref) > MAX_REF_LENGTH:
-                raise ValueError("Invalid Reference")
-
             db_watch = Watch(
-                reference_code=ref,
+                reference_code=row['Reference'],
                 color_dial=(row.get('Color') or None),
                 watch_condition=(row.get('Condition') or None),
                 production_year=parse_year_safe(row.get('Year')),
                 cost=price_float,
                 currency=(row.get('Currency') or None),
                 watch_info=(row.get('Info') or None),
-                as_of_date=as_of,                 
+                as_of_date=as_of,                 # NEW: guardamos la fecha aquí
             )
             db.add(db_watch)
             success_count += 1
 
         except Exception as e:
             errors.append({
-                "row": int(index),
+                "row": index,
                 "reference": row.get('Reference', ''),
                 "price": row.get('Price', ''),
                 "error": str(e)
@@ -88,7 +84,6 @@ async def clean_watches(
         db.commit()
     except Exception as e:
         db.rollback()
-        os.remove(temp_path)
         return {
             "status": "error_on_commit",
             "rows_saved": success_count,
@@ -108,35 +103,9 @@ async def clean_watches(
 def parse_year_safe(date_val):
     try:
         cleaned = str(date_val).lower().strip().replace('y', '').replace('/', '')
-        year = int(float(cleaned))  # por si viene "2020.0"
+        year = int(cleaned)
         if 1900 <= year <= 2100:
             return year
     except:
         return None
     return None
-
-def parse_price_safe(val):
-    """
-    Acepta strings con separadores comunes, convierte a float o None.
-    Ejemplos válidos: "1200", "1,200.50", "1.200,50" (según origen),
-    """
-    if val is None:
-        return None
-    s = str(val).strip()
-    if s == "":
-        return None
-    try:
-        # heurística simple: si tiene coma y punto, normalizar a notación con punto decimal
-        if "," in s and "." in s:
-            # asume separador de miles = coma, decimal = punto (1,234.56)
-            s = s.replace(",", "")
-            return float(s)
-        if "," in s and "." not in s:
-            # asume decimal = coma (1234,56) -> 1234.56
-            s = s.replace(".", "")
-            s = s.replace(",", ".")
-            return float(s)
-        # caso normal
-        return float(s)
-    except:
-        return None

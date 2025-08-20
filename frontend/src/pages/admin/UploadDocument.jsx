@@ -151,14 +151,12 @@ export default function UploadDocument() {
               <Form.Text muted>Only .xlsx format is supported.</Form.Text>
             </Form.Group>
 
-            {/* NEW: fecha a la que corresponden los datos */}
             <Form.Group controlId="formAsOfDate" className="mb-3">
               <Form.Label className="fw-semibold">
-                ¿A qué fecha corresponden estos datos?
+                What date do these data correspond to?
               </Form.Label>
               <Form.Control
                 type="date"
-                // permitir solo hoy o pasado
                 max={todayStr}
                 value={asOfDate}
                 onChange={(e) => setAsOfDate(e.target.value)}
@@ -166,7 +164,7 @@ export default function UploadDocument() {
                 required
               />
               <Form.Text muted>
-                Solo se permite seleccionar hoy o días anteriores.
+                Only today or past dates can be selected.
               </Form.Text>
             </Form.Group>
 
