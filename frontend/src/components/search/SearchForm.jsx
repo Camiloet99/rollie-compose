@@ -9,6 +9,7 @@ import ReferenceSuggestions from "./ReferenceSuggestions";
  *  - onSubmit, loading
  *  - showAdvanced, setShowAdvanced
  *  - autocompleteEnabled, suggestions, suggestionsOpen, suggestionsLoading
+ *  - onPickSuggestion: (value, setFilters) => void   // 👈 NUEVO
  */
 export default function SearchForm({
   filters,
@@ -21,6 +22,7 @@ export default function SearchForm({
   suggestions = [],
   suggestionsOpen = false,
   suggestionsLoading = false,
+  onPickSuggestion, // 👈 NUEVO
 }) {
   const referenceInputRef = useRef(null);
 
@@ -80,9 +82,23 @@ export default function SearchForm({
                   open={suggestionsOpen}
                   loading={suggestionsLoading}
                   items={suggestions}
-                  onPick={(ref) =>
-                    setFilters((p) => ({ ...p, reference: ref }))
-                  }
+                  onPick={(ref) => {
+                    if (typeof onPickSuggestion === "function") {
+                      // el contenedor cerrará el dropdown (setSuggestionsOpen(false) + limpiar items)
+                      onPickSuggestion(ref, setFilters);
+                    } else {
+                      // fallback: al menos completar el input aquí
+                      setFilters((p) => ({ ...p, reference: ref }));
+                    }
+                    // reenfocar input
+                    if (referenceInputRef.current) {
+                      referenceInputRef.current.focus();
+                      try {
+                        const end = String(ref || "").length;
+                        referenceInputRef.current.setSelectionRange(end, end);
+                      } catch {}
+                    }
+                  }}
                 />
               )}
             </div>

@@ -107,7 +107,6 @@ export default function Search() {
         setReferenceSuggestions(suggestions || []);
         setSuggestionsOpen(true);
       } catch (_e) {
-        // ignorar cancelaciones
         setReferenceSuggestions([]);
         setSuggestionsOpen(true);
       } finally {
@@ -133,7 +132,6 @@ export default function Search() {
   const runSearch = async (activeFilters) => {
     const payload = {
       referenceCode: activeFilters.reference?.trim() || null,
-      // Solo incluye avanzados si están activos; si no, los manda null
       colorDial:
         showAdvancedEnabled && showAdvanced
           ? activeFilters.color || null
@@ -178,7 +176,7 @@ export default function Search() {
       setLimitExceeded(false);
       if (searchHistoryLimit > 0) {
         const toSave = { ...filters };
-        delete toSave.adv; // no guardar adv en historial
+        delete toSave.adv;
         saveSearchToHistory(toSave, searchHistoryLimit);
         setHistoryRefreshToggle((prev) => !prev);
       }

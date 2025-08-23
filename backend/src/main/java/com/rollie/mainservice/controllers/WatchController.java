@@ -24,26 +24,28 @@ public class WatchController {
     private final WatchService watchService;
     private final SearchService searchService;
 
-    @GetMapping("/{reference}")
+    @GetMapping("/{reference}/window/{window}")
     public Mono<ResponseEntity<ResponseBody<List<WatchEntity>>>> getWatchByReference(
             @PathVariable String reference,
-            @RequestParam Long userId
+            @RequestParam Long userId,
+            @RequestParam(required = false) String window
     ) {
         return searchService.validateSearchLimit(userId)
-                .then(watchService.getWatchByReference(reference))
+                .then(watchService.getWatchByReference(reference, window))
                 .flatMap(results -> Mono.defer(() ->
                         searchService.logSearch(userId, reference)
                                 .thenReturn(ControllerUtils.ok(results))
                 ));
     }
 
-    @PostMapping("/search")
+    @PostMapping("/search/window/{window}")
     public Mono<ResponseEntity<ResponseBody<List<WatchEntity>>>> searchWatches(
             @RequestBody WatchSearchRequest request,
-            @RequestParam Long userId
+            @RequestParam Long userId,
+            @RequestParam(required = false) String window
     ) {
         return searchService.validateSearchLimit(userId)
-                .then(watchService.searchWatches(request))
+                .then(watchService.searchWatches(request, window))
                 .flatMap(results -> Mono.defer(() ->
                         searchService.logSearch(userId, request.getReferenceCode())
                                 .thenReturn(ControllerUtils.ok(results))

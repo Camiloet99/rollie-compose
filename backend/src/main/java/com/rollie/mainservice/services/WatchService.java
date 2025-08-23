@@ -31,17 +31,17 @@ public class WatchService {
     private final AppConfigRepository appConfigRepository;
     private final ExchangeRateService exchangeRateService;
 
-    public Mono<List<WatchEntity>> searchWatches(WatchSearchRequest req) {
-        final String window = (req.getWindow() == null || req.getWindow().isBlank())
-                ? "today" : req.getWindow().trim().toLowerCase();
+    // WatchService.java
+    public Mono<List<WatchEntity>> searchWatches(WatchSearchRequest req, String window) {
+        final String win = (window == null || window.isBlank())
+                ? "today"
+                : window.trim().toLowerCase();
 
         return getLatestAsOfDate()
                 .flatMap(latest -> {
-                    if (latest == null) {
-                        return Mono.just(List.<WatchEntity>of());
-                    }
+                    if (latest == null) return Mono.just(List.<WatchEntity>of());
 
-                    switch (window) {
+                    switch (win) {
                         case "7d":
                             return searchAndAggregateByWindow(req, latest, 7);
                         case "15d":
@@ -52,13 +52,14 @@ public class WatchService {
                                     req.getReferenceCode(), req.getColorDial(), req.getProductionYear(),
                                     req.getCondition(), req.getMinPrice(), req.getMaxPrice(),
                                     req.getCurrency(), req.getWatchInfo(), latest
-                            )
-                                    .flatMap(this::applyMarkup);
+                            ).flatMap(this::applyMarkup);
                     }
                 })
-                .onErrorResume(e -> Mono.just(List.<WatchEntity>of()));
+                .onErrorResume(e -> {
+                    // log.warn("searchWatches failed", e);
+                    return Mono.just(List.<WatchEntity>of());
+                });
     }
-
 
     private Mono<List<WatchEntity>> searchAndAggregateByWindow(WatchSearchRequest req, LocalDate latest, int days) {
         LocalDate from = latest.minusDays(days - 1);
@@ -69,8 +70,8 @@ public class WatchService {
                 req.getCondition(), req.getMinPrice(), req.getMaxPrice(),
                 req.getCurrency(), req.getWatchInfo(), from, to
         )
-                .flatMap(this::applyMarkup)          // convertir a USD + markup por fila
-                .map(this::aggregateByReferenceAvg); // agrupar y promediar
+                .flatMap(this::applyMarkup)          // convierte a USD + markup por fila
+                .map(this::aggregateByReferenceAvg); // agrupa por ref y promedia
     }
 
     private Mono<List<WatchEntity>> executeSearchWithRange(
@@ -85,8 +86,7 @@ public class WatchService {
             LocalDate from,
             LocalDate to
     ) {
-        // Formatear explícitamente a "YYYY-MM-DD" para evitar ligue como int
-        String fromStr = (from != null) ? from.toString() : null; // ISO_LOCAL_DATE => "yyyy-MM-dd"
+        String fromStr = (from != null) ? from.toString() : null; // "yyyy-MM-dd"
         String toStr   = (to != null)   ? to.toString()   : null;
 
         StringBuilder sql = new StringBuilder(
@@ -127,20 +127,19 @@ public class WatchService {
                 .bind("from", fromStr)
                 .bind("to", toStr);
 
-        if (referenceCode != null && !referenceCode.isBlank()) spec = spec.bind("referenceCode", referenceCode);
-        if (colorDial != null && !colorDial.isBlank()) spec = spec.bind("colorDial", colorDial);
+        if (referenceCode != null && !referenceCode.isBlank()) spec = spec.bind("referenceCode", referenceCode.trim());
+        if (colorDial != null && !colorDial.isBlank()) spec = spec.bind("colorDial", colorDial.trim());
         if (productionYear != null) spec = spec.bind("productionYear", productionYear);
-        if (condition != null && !condition.isBlank()) spec = spec.bind("condition", condition);
+        if (condition != null && !condition.isBlank()) spec = spec.bind("condition", condition.trim());
         if (minPrice != null) spec = spec.bind("minPrice", minPrice);
         if (maxPrice != null) spec = spec.bind("maxPrice", maxPrice);
-        if (currency != null && !currency.isBlank()) spec = spec.bind("currency", currency);
-        if (watchInfo != null && !watchInfo.isBlank()) spec = spec.bind("watchInfo", watchInfo);
+        if (currency != null && !currency.isBlank()) spec = spec.bind("currency", currency.trim());
+        if (watchInfo != null && !watchInfo.isBlank()) spec = spec.bind("watchInfo", watchInfo.trim());
 
         return spec.map(this::mapRowToWatch).all().collectList();
     }
 
-
-    public Mono<List<WatchEntity>> getWatchByReference(String reference) {
+    public Mono<List<WatchEntity>> getWatchByReference(String reference, String window) {
         return getLatestAsOfDate()
                 .flatMap(latest ->
                         watchRepository.findByReferenceCode(reference)

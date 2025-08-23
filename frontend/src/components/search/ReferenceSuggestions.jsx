@@ -1,4 +1,3 @@
-// src/components/search/ReferenceSuggestions.jsx
 import { memo } from "react";
 
 function RowSkeleton() {
