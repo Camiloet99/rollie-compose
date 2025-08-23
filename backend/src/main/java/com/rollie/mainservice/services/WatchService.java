@@ -61,7 +61,6 @@ public class WatchService {
                 });
     }
 
-    // ✅ Java 11 compatible
     private Mono<LocalDate> mapMaxDate(Object v) {
         if (v == null) return Mono.empty();
 
@@ -108,17 +107,28 @@ public class WatchService {
                 .flatMap(map -> mapMaxDate(map.get("max_date")));
     }
 
-    private Mono<List<WatchEntity>> searchAndAggregateByWindow(WatchSearchRequest req, LocalDate latest, int days) {
-        LocalDate from = latest.minusDays(days - 1);
-        LocalDate to = latest;
+    private Mono<LocalDate> resolveAnchorDate(String reference, LocalDate globalLatest) {
+        return getLatestAsOfDateForReference(reference)
+                .switchIfEmpty(Mono.justOrEmpty(globalLatest));
+    }
 
-        return executeSearchWithRange(
-                req.getReferenceCode(), req.getColorDial(), req.getProductionYear(),
-                req.getCondition(), req.getMinPrice(), req.getMaxPrice(),
-                req.getCurrency(), req.getWatchInfo(), from, to
-        )
-                .flatMap(this::applyMarkup)          // convierte a USD + markup por fila
-                .map(this::aggregateByReferenceAvg); // agrupa por ref y promedia
+    private Mono<List<WatchEntity>> searchAndAggregateByWindow(WatchSearchRequest req, LocalDate globalLatest, int days) {
+        String ref = req.getReferenceCode();
+
+        return resolveAnchorDate(ref, globalLatest)
+                .flatMap(anchor -> {
+                    if (anchor == null) return Mono.just(List.<WatchEntity>of());
+                    LocalDate from = anchor.minusDays(days - 1);
+                    LocalDate to = anchor;
+
+                    return executeSearchWithRange(
+                            req.getReferenceCode(), req.getColorDial(), req.getProductionYear(),
+                            req.getCondition(), req.getMinPrice(), req.getMaxPrice(),
+                            req.getCurrency(), req.getWatchInfo(), from, to
+                    )
+                            .flatMap(this::applyMarkup)
+                            .map(this::aggregateByReferenceAvg);
+                });
     }
 
     private Mono<List<WatchEntity>> executeSearchWithRange(
@@ -133,18 +143,18 @@ public class WatchService {
             LocalDate from,
             LocalDate to
     ) {
-        String fromStr = (from != null) ? from.toString() : null; // "yyyy-MM-dd"
+        String fromStr = (from != null) ? from.toString() : null; // yyyy-MM-dd
         String toStr   = (to != null)   ? to.toString()   : null;
 
         StringBuilder sql = new StringBuilder(
                 "SELECT id, reference_code, color_dial, production_year, watch_condition, " +
                         "       cost, created_at, currency, watch_info, as_of_date " +
                         "FROM watches " +
-                        "WHERE as_of_date BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE) "
+                        "WHERE CAST(as_of_date AS DATE) BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE) "
         );
 
         if (referenceCode != null && !referenceCode.isBlank()) {
-            sql.append(" AND UPPER(reference_code) = UPPER(:referenceCode) ");
+            sql.append(" AND TRIM(UPPER(reference_code)) = TRIM(UPPER(:referenceCode)) ");
         }
         if (colorDial != null && !colorDial.isBlank()) {
             sql.append(" AND UPPER(color_dial) = UPPER(:colorDial) ");
@@ -161,9 +171,6 @@ public class WatchService {
         if (maxPrice != null) {
             sql.append(" AND cost <= :maxPrice ");
         }
-        if (currency != null && !currency.isBlank()) {
-            sql.append(" AND UPPER(currency) = UPPER(:currency) ");
-        }
         if (watchInfo != null && !watchInfo.isBlank()) {
             sql.append(" AND UPPER(watch_info) LIKE CONCAT('%', UPPER(:watchInfo), '%') ");
         }
@@ -175,13 +182,12 @@ public class WatchService {
                 .bind("to", toStr);
 
         if (referenceCode != null && !referenceCode.isBlank()) spec = spec.bind("referenceCode", referenceCode.trim());
-        if (colorDial != null && !colorDial.isBlank()) spec = spec.bind("colorDial", colorDial.trim());
-        if (productionYear != null) spec = spec.bind("productionYear", productionYear);
-        if (condition != null && !condition.isBlank()) spec = spec.bind("condition", condition.trim());
-        if (minPrice != null) spec = spec.bind("minPrice", minPrice);
-        if (maxPrice != null) spec = spec.bind("maxPrice", maxPrice);
-        if (currency != null && !currency.isBlank()) spec = spec.bind("currency", currency.trim());
-        if (watchInfo != null && !watchInfo.isBlank()) spec = spec.bind("watchInfo", watchInfo.trim());
+        if (colorDial != null && !colorDial.isBlank())         spec = spec.bind("colorDial", colorDial.trim());
+        if (productionYear != null)                            spec = spec.bind("productionYear", productionYear);
+        if (condition != null && !condition.isBlank())         spec = spec.bind("condition", condition.trim());
+        if (minPrice != null)                                  spec = spec.bind("minPrice", minPrice);
+        if (maxPrice != null)                                  spec = spec.bind("maxPrice", maxPrice);
+        if (watchInfo != null && !watchInfo.isBlank())         spec = spec.bind("watchInfo", watchInfo.trim());
 
         return spec.map(this::mapRowToWatch).all().collectList();
     }

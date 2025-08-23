@@ -3,6 +3,19 @@ import CompareToggle from "../compare/CompareToggle";
 import moment from "moment";
 import { formatPrice } from "../../utils/formatPrice";
 
+const renderBadges = (text, variant, uppercase = false) => {
+  if (!text) return null;
+  return text
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item, idx) => (
+      <Badge bg={variant} key={idx} className="me-1 text-capitalize">
+        {uppercase ? item.toUpperCase() : item}
+      </Badge>
+    ));
+};
+
 function TierBadge({ tier }) {
   if (!tier) return null;
   const label = tier.toUpperCase();
@@ -17,28 +30,12 @@ function TierBadge({ tier }) {
   );
 }
 
-const renderBadges = (text, variant, uppercase = false) => {
-  if (!text) return null;
-  return text
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .map((item, idx) => (
-      <Badge bg={variant} key={idx} className="me-1 text-capitalize">
-        {uppercase ? item.toUpperCase() : item}
-      </Badge>
-    ));
-};
-
 export default function WatchCard({ watch, priceTier }) {
   return (
     <Card
-      className="mb-3 shadow-sm border-0 rounded-4 p-3 position-relative has-compare"
-      /* has-compare reserva espacio arriba en md+ */
+      className="mb-3 shadow-sm border-0 rounded-4 p-3"
       style={{ background: "#ffffff" }}
     >
-      <CompareToggle watch={watch} />
-
       <Row>
         <Col md={6} className="d-flex flex-column justify-content-center">
           <div className="d-flex align-items-center justify-content-between">
@@ -102,6 +99,11 @@ export default function WatchCard({ watch, priceTier }) {
           </Button>
         </Col>
       </Row>
+
+      {/* Compare al final, alineado a la derecha en md+ y centrado en xs */}
+      <div className="d-flex justify-content-center justify-content-md-end mt-3">
+        <CompareToggle watch={watch} />
+      </div>
     </Card>
   );
 }
