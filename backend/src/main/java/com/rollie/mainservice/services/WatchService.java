@@ -51,8 +51,7 @@ public class WatchService {
                             return executeSearchWithAsOf(
                                     req.getReferenceCode(), req.getColorDial(), req.getProductionYear(),
                                     req.getCondition(), req.getMinPrice(), req.getMaxPrice(),
-                                    req.getCurrency(), req.getWatchInfo(), latest
-                            )
+                                    req.getCurrency(), req.getWatchInfo(), latest)
                                     .flatMap(this::applyMarkup);
                     }
                 })
