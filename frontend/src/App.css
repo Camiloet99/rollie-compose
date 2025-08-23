@@ -36,3 +36,27 @@
     transform: rotate(360deg);
   }
 }
+
+/* Toggle flotante por defecto (md+) */
+.compare-floater {
+  position: absolute;
+  top: .5rem;
+  right: .5rem;
+  z-index: 2;
+}
+
+/* En md+ reserva altura para que el floater no tape el contenido del card */
+@media (min-width: 768px) {
+  .has-compare {
+    padding-top: 2.25rem;
+    /* ajusta si lo quieres más/menos separado */
+  }
+}
+
+/* En pantallas chicas, que el toggle sea parte del flujo y no flote */
+@media (max-width: 767.98px) {
+  .compare-floater {
+    position: static;
+    margin-bottom: .5rem;
+  }
+}

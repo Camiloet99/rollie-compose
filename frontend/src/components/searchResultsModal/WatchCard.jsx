@@ -3,6 +3,20 @@ import CompareToggle from "../compare/CompareToggle";
 import moment from "moment";
 import { formatPrice } from "../../utils/formatPrice";
 
+function TierBadge({ tier }) {
+  if (!tier) return null;
+  const label = tier.toUpperCase();
+  return (
+    <Badge
+      bg="light"
+      className={`tier-badge tier-${tier}`}
+      title={`Price tier: ${label}`}
+    >
+      {label}
+    </Badge>
+  );
+}
+
 const renderBadges = (text, variant, uppercase = false) => {
   if (!text) return null;
   return text
@@ -16,25 +30,11 @@ const renderBadges = (text, variant, uppercase = false) => {
     ));
 };
 
-// Reemplaza TU TierBadge por este:
-function TierBadge({ tier }) {
-  if (!tier) return null;
-  const label = tier.toUpperCase(); // LOW | MID | HIGH
-  return (
-    <Badge
-      bg="light"
-      className={`tier-badge tier-${tier}`}
-      title={`Price tier: ${label}`}
-    >
-      {label}
-    </Badge>
-  );
-}
-
 export default function WatchCard({ watch, priceTier }) {
   return (
     <Card
-      className="mb-3 shadow-sm border-0 rounded-4 p-3 position-relative"
+      className="mb-3 shadow-sm border-0 rounded-4 p-3 position-relative has-compare"
+      /* has-compare reserva espacio arriba en md+ */
       style={{ background: "#ffffff" }}
     >
       <CompareToggle watch={watch} />
@@ -85,8 +85,6 @@ export default function WatchCard({ watch, priceTier }) {
               {renderBadges(watch.extraInfo, "warning", true)}
             </div>
           )}
-
-          {/* Forzar USD en la vista */}
           <div className="fw-semibold fs-5 text-success mb-1">
             {formatPrice(watch.cost, "USD")}
           </div>
