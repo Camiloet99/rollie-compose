@@ -128,7 +128,7 @@ export default function SearchResultsModal({
         ) : results.length === 0 ? (
           <p className="text-center text-muted mt-4">No results found.</p>
         ) : (
-          <div>
+          <div className="mt-3">
             {sortedResults.map((watch) => (
               <WatchCard
                 key={

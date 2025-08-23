@@ -120,25 +120,6 @@ export default function AdvancedFilters({
         </Form.Group>
       </Col>
 
-      {/* Currency */}
-      <Col md={3}>
-        <Form.Group controlId="currency">
-          <Form.Label>Currency</Form.Label>
-          <Form.Select
-            name="currency"
-            value={filters.currency || ""}
-            onChange={handleChange}
-            disabled={loading}
-          >
-            <option value="">Any</option>
-            <option value="USD">USD</option>
-            <option value="USDT">USDT</option>
-            <option value="EUR">EUR</option>
-            <option value="COP">COP</option>
-          </Form.Select>
-        </Form.Group>
-      </Col>
-
       {/* Extra Info */}
       <Col md={6}>
         <Form.Group controlId="extraInfo">
