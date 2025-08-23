@@ -38,7 +38,8 @@ const DEFAULT_FILTERS = {
   priceMax: "",
   currency: "",
   extraInfo: "",
-  adv: "", // "1" cuando esté abierto
+  window: "today",
+  adv: "",
 };
 
 export default function Search() {
@@ -263,7 +264,6 @@ export default function Search() {
 
         <Form onSubmit={handleSearch}>
           <Card className="p-4 shadow-sm border-0">
-            {/* fila principal del form con skeletons y autocomplete */}
             <SearchForm
               filters={filters}
               setFilters={setFilters}
@@ -293,7 +293,6 @@ export default function Search() {
               />
             )}
 
-            {/* botones utilitarios */}
             <Row className="mt-3">
               <Col className="d-flex gap-2 justify-content-end">
                 <Button
@@ -330,7 +329,6 @@ export default function Search() {
         loading={loading}
       />
 
-      {/* Comparador */}
       <CompareButton />
       <CompareDrawer />
     </PageTransition>

@@ -2,7 +2,8 @@ import { Button } from "react-bootstrap";
 
 export default function ActiveFilterChips({ filters, setFilters }) {
   const entries = Object.entries(filters).filter(([k, v]) => {
-    if (k === "adv" || k === "reference") return false; // excluye estos
+    if (k === "adv" || k === "reference") return false;
+    if (k === "window" && (v === "" || v === "today")) return false;
     const s = String(v ?? "").trim();
     return s !== "";
   });
@@ -50,6 +51,7 @@ function labelOf(key) {
     priceMax: "Max Price",
     currency: "Currency",
     extraInfo: "Extra Info",
+    window: "Data from",
     brand: "Brand",
   };
   return map[key] || key;

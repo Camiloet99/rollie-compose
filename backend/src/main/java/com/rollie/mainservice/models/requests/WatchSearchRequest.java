@@ -4,9 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
-import lombok.Value;
 
-@Value
+@Data
 @Builder(toBuilder = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -19,5 +18,11 @@ public class WatchSearchRequest {
     private Double maxPrice;
     private String currency;
     private String watchInfo;
+
+    /** @deprecated usar window = today|7d|15d */
+    @Deprecated
     private Boolean lastDayOnly;
+
+    /** Ventana temporal: today (default), 7d, 15d */
+    private String window;
 }

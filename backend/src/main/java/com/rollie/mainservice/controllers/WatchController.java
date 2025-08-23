@@ -43,17 +43,7 @@ public class WatchController {
             @RequestParam Long userId
     ) {
         return searchService.validateSearchLimit(userId)
-                .then(watchService.searchWatches(
-                        request.getReferenceCode(),
-                        request.getColorDial(),
-                        request.getProductionYear(),
-                        request.getCondition(),
-                        request.getMinPrice(),
-                        request.getMaxPrice(),
-                        request.getCurrency(),
-                        request.getWatchInfo(),
-                        request.getLastDayOnly()
-                ))
+                .then(watchService.searchWatches(request))
                 .flatMap(results -> Mono.defer(() ->
                         searchService.logSearch(userId, request.getReferenceCode())
                                 .thenReturn(ControllerUtils.ok(results))
