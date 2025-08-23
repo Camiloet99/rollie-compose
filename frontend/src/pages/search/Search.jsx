@@ -126,41 +126,45 @@ export default function Search() {
     setSuggestionsOpen(false);
   };
 
-  // ---- mantener adv en URL ----
   useEffect(() => {
     setFilters((prev) => ({ ...prev, adv: showAdvanced ? "1" : "" }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAdvanced]);
 
-  // ---- submit búsqueda ----
   const runSearch = async (activeFilters) => {
-    let fetchedResults = [];
-    if (showAdvancedEnabled && showAdvanced) {
-      const payload = {
-        referenceCode: activeFilters.reference,
-        colorDial: activeFilters.color,
-        productionYear: activeFilters.year
+    const payload = {
+      referenceCode: activeFilters.reference?.trim() || null,
+      // Solo incluye avanzados si están activos; si no, los manda null
+      colorDial:
+        showAdvancedEnabled && showAdvanced
+          ? activeFilters.color || null
+          : null,
+      productionYear:
+        showAdvancedEnabled && showAdvanced && activeFilters.year
           ? parseInt(activeFilters.year)
           : null,
-        watchCondition: activeFilters.condition,
-        minPrice: activeFilters.priceMin
+      condition:
+        showAdvancedEnabled && showAdvanced
+          ? activeFilters.condition || null
+          : null,
+      minPrice:
+        showAdvancedEnabled && showAdvanced && activeFilters.priceMin
           ? parseFloat(activeFilters.priceMin)
           : null,
-        maxPrice: activeFilters.priceMax
+      maxPrice:
+        showAdvancedEnabled && showAdvanced && activeFilters.priceMax
           ? parseFloat(activeFilters.priceMax)
           : null,
-        currency: activeFilters.currency || null,
-        watchInfo: activeFilters.extraInfo || null,
-      };
-      fetchedResults = await searchWatches(payload, user.userId);
-    } else {
-      if (!activeFilters.reference) return [];
-      fetchedResults = await getWatchByReference(
-        activeFilters.reference,
-        user.userId
-      );
-    }
-    return fetchedResults;
+      currency:
+        showAdvancedEnabled && showAdvanced
+          ? activeFilters.currency || null
+          : null,
+      watchInfo:
+        showAdvancedEnabled && showAdvanced
+          ? activeFilters.extraInfo || null
+          : null,
+      window: activeFilters.window || "today",
+    };
+    return await searchWatches(payload, user.userId);
   };
 
   const handleSearch = async (e) => {
@@ -209,6 +213,7 @@ export default function Search() {
           prevFilters.priceMin?.length ||
           prevFilters.priceMax?.length ||
           prevFilters.currency?.length ||
+          prevFilters.window?.length ||
           prevFilters.extraInfo?.length);
 
       setShowAdvanced(Boolean(isAdvanced));

@@ -47,28 +47,6 @@ export default function SearchForm({
     }
   };
 
-  // 👇 usado por ReferenceSuggestions
-  const handleSuggestionSelect = (val) => {
-    const ref =
-      typeof val === "string"
-        ? val
-        : val?.value ?? val?.reference ?? val?.reference_code ?? "";
-    if (!ref) return;
-
-    setFilters((prev) => ({ ...prev, reference: ref }));
-
-    // re-enfoca y mueve el cursor al final (detalle UX)
-    if (referenceInputRef.current) {
-      referenceInputRef.current.focus();
-      const el = referenceInputRef.current;
-      const end = ref.length;
-      // setSelectionRange puede fallar en input number; aquí es text
-      try {
-        el.setSelectionRange(end, end);
-      } catch (_) {}
-    }
-  };
-
   return (
     <Form onKeyDown={handleKeyDown}>
       {/* ===== BASIC: SOLO Reference + Data from ===== */}
