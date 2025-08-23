@@ -290,6 +290,7 @@ export default function Search() {
                     [e.target.name]: e.target.value,
                   }))
                 }
+                loading={loading}
               />
             )}
 

@@ -3,12 +3,18 @@ import { Button, Form, Row, Col, Spinner } from "react-bootstrap";
 import { FaSearch, FaTimesCircle } from "react-icons/fa";
 import ReferenceSuggestions from "./ReferenceSuggestions";
 
+/**
+ * Props:
+ *  - filters, setFilters
+ *  - onSubmit, loading
+ *  - showAdvanced, setShowAdvanced
+ *  - autocompleteEnabled, suggestions, suggestionsOpen, suggestionsLoading
+ */
 export default function SearchForm({
   filters,
   setFilters,
   onSubmit,
   loading = false,
-  showAdvancedEnabled = true,
   showAdvanced = false,
   setShowAdvanced = () => {},
   autocompleteEnabled = false,
@@ -26,8 +32,7 @@ export default function SearchForm({
   };
 
   const handleWindowChange = (e) => {
-    const value = e.target.value;
-    setFilters((prev) => ({ ...prev, window: value }));
+    setFilters((prev) => ({ ...prev, window: e.target.value }));
   };
 
   const handleKeyDown = (e) => {
@@ -39,6 +44,7 @@ export default function SearchForm({
 
   return (
     <Form onKeyDown={handleKeyDown}>
+      {/* ===== BASIC: SOLO Reference + Data from ===== */}
       <Row className="g-3 align-items-end">
         {/* Reference Number */}
         <Col md={6} lg={6}>
@@ -62,6 +68,7 @@ export default function SearchForm({
                   title="Clear"
                 />
               )}
+
               {autocompleteEnabled && (
                 <ReferenceSuggestions
                   open={suggestionsOpen}
@@ -77,7 +84,7 @@ export default function SearchForm({
         </Col>
 
         {/* Data from (window) */}
-        <Col md={2} lg={2}>
+        <Col md={4} lg={4}>
           <Form.Group controlId="window">
             <Form.Label>Data from</Form.Label>
             <Form.Select
@@ -95,16 +102,15 @@ export default function SearchForm({
 
         {/* Botones */}
         <Col xs="12" md="auto" className="ms-auto d-flex gap-2">
-          {showAdvancedEnabled && (
-            <Button
-              variant={showAdvanced ? "outline-secondary" : "outline-dark"}
-              type="button"
-              onClick={() => setShowAdvanced((v) => !v)}
-              disabled={loading}
-            >
-              {showAdvanced ? "Hide advanced" : "Show advanced"}
-            </Button>
-          )}
+          <Button
+            variant={showAdvanced ? "outline-secondary" : "outline-dark"}
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            disabled={loading}
+          >
+            {showAdvanced ? "Hide advanced" : "Show advanced"}
+          </Button>
+
           <Button
             type="button"
             onClick={onSubmit}
@@ -124,148 +130,6 @@ export default function SearchForm({
           </Button>
         </Col>
       </Row>
-
-      {showAdvanced && (
-        <Row className="g-3 mt-1">
-          {/* Color */}
-          <Col md={3}>
-            <Form.Group controlId="color">
-              <Form.Label>Color</Form.Label>
-              <Form.Control
-                name="color"
-                value={filters.color || ""}
-                onChange={handleChange}
-                placeholder="Dial color"
-                disabled={loading}
-              />
-            </Form.Group>
-          </Col>
-
-          {/* Condition */}
-          <Col md={3}>
-            <Form.Group controlId="condition">
-              <Form.Label>Condition</Form.Label>
-              <Form.Select
-                name="condition"
-                value={filters.condition || ""}
-                onChange={handleChange}
-                disabled={loading}
-              >
-                <option value="">Any</option>
-                <option value="new">New</option>
-                <option value="like_new">Like New</option>
-                <option value="very_good">Very Good</option>
-                <option value="good">Good</option>
-              </Form.Select>
-            </Form.Group>
-          </Col>
-
-          {/* Material */}
-          <Col md={3}>
-            <Form.Group controlId="material">
-              <Form.Label>Material</Form.Label>
-              <Form.Control
-                name="material"
-                value={filters.material || ""}
-                onChange={handleChange}
-                placeholder="Steel, Gold, Titanium…"
-                disabled={loading}
-              />
-            </Form.Group>
-          </Col>
-
-          {/* Production Year */}
-          <Col md={3}>
-            <Form.Group controlId="year">
-              <Form.Label>Production Year</Form.Label>
-              <Form.Control
-                name="year"
-                value={filters.year || ""}
-                onChange={handleChange}
-                placeholder="e.g. 2019"
-                disabled={loading}
-              />
-            </Form.Group>
-          </Col>
-
-          {/* Min / Max Price */}
-          <Col md={3}>
-            <Form.Group controlId="priceMin">
-              <Form.Label>Min Price</Form.Label>
-              <Form.Control
-                type="number"
-                name="priceMin"
-                value={filters.priceMin || ""}
-                onChange={handleChange}
-                placeholder="0"
-                min="0"
-                disabled={loading}
-              />
-            </Form.Group>
-          </Col>
-          <Col md={3}>
-            <Form.Group controlId="priceMax">
-              <Form.Label>Max Price</Form.Label>
-              <Form.Control
-                type="number"
-                name="priceMax"
-                value={filters.priceMax || ""}
-                onChange={handleChange}
-                placeholder="100000"
-                min="0"
-                disabled={loading}
-              />
-            </Form.Group>
-          </Col>
-
-          {/* Currency */}
-          <Col md={3}>
-            <Form.Group controlId="currency">
-              <Form.Label>Currency</Form.Label>
-              <Form.Select
-                name="currency"
-                value={filters.currency || ""}
-                onChange={handleChange}
-                disabled={loading}
-              >
-                <option value="">Any</option>
-                <option value="USD">USD</option>
-                <option value="USDT">USDT</option>
-                <option value="EUR">EUR</option>
-                <option value="COP">COP</option>
-              </Form.Select>
-            </Form.Group>
-          </Col>
-
-          {/* Extra Info */}
-          <Col md={6}>
-            <Form.Group controlId="extraInfo">
-              <Form.Label>Extra Info</Form.Label>
-              <Form.Control
-                name="extraInfo"
-                value={filters.extraInfo || ""}
-                onChange={handleChange}
-                placeholder="Keywords (comma separated)"
-                disabled={loading}
-              />
-            </Form.Group>
-          </Col>
-
-          {/* Brand */}
-          <Col md={3}>
-            <Form.Group controlId="brand">
-              <Form.Label>Brand</Form.Label>
-              <Form.Control
-                name="brand"
-                value={filters.brand || ""}
-                onChange={handleChange}
-                placeholder="Rolex, Omega…"
-                disabled={loading}
-              />
-            </Form.Group>
-          </Col>
-        </Row>
-      )}
     </Form>
   );
 }
