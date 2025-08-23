@@ -51,14 +51,14 @@ public class WatchService {
                             return executeSearchWithAsOf(
                                     req.getReferenceCode(), req.getColorDial(), req.getProductionYear(),
                                     req.getCondition(), req.getMinPrice(), req.getMaxPrice(),
-                                    req.getCurrency(), req.getWatchInfo(), latest)
+                                    req.getCurrency(), req.getWatchInfo(), latest
+                            )
                                     .flatMap(this::applyMarkup);
                     }
                 })
-                .onErrorResume(e -> {
-                    return Mono.just(List.of());
-                });
+                .onErrorResume(e -> Mono.just(List.<WatchEntity>of()));
     }
+
 
     private Mono<List<WatchEntity>> searchAndAggregateByWindow(WatchSearchRequest req, LocalDate latest, int days) {
         LocalDate from = latest.minusDays(days - 1);
@@ -69,8 +69,8 @@ public class WatchService {
                 req.getCondition(), req.getMinPrice(), req.getMaxPrice(),
                 req.getCurrency(), req.getWatchInfo(), from, to
         )
-                .flatMap(this::applyMarkup)          // convierte a USD y aplica markup fila a fila
-                .map(this::aggregateByReferenceAvg); // agrupa por referencia y promedia costos
+                .flatMap(this::applyMarkup)          // convertir a USD + markup por fila
+                .map(this::aggregateByReferenceAvg); // agrupar y promediar
     }
 
     private Mono<List<WatchEntity>> executeSearchWithRange(
@@ -85,9 +85,16 @@ public class WatchService {
             LocalDate from,
             LocalDate to
     ) {
-        StringBuilder sql = new StringBuilder("SELECT id, reference_code, color_dial, production_year, watch_condition, " +
-                "cost, created_at, currency, watch_info, as_of_date FROM watches " +
-                "WHERE as_of_date BETWEEN :from AND :to ");
+        // Formatear explícitamente a "YYYY-MM-DD" para evitar ligue como int
+        String fromStr = (from != null) ? from.toString() : null; // ISO_LOCAL_DATE => "yyyy-MM-dd"
+        String toStr   = (to != null)   ? to.toString()   : null;
+
+        StringBuilder sql = new StringBuilder(
+                "SELECT id, reference_code, color_dial, production_year, watch_condition, " +
+                        "       cost, created_at, currency, watch_info, as_of_date " +
+                        "FROM watches " +
+                        "WHERE as_of_date BETWEEN CAST(:from AS DATE) AND CAST(:to AS DATE) "
+        );
 
         if (referenceCode != null && !referenceCode.isBlank()) {
             sql.append(" AND UPPER(reference_code) = UPPER(:referenceCode) ");
@@ -117,8 +124,8 @@ public class WatchService {
         sql.append(" ORDER BY reference_code, as_of_date DESC, created_at DESC ");
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql.toString())
-                .bind("from", from)
-                .bind("to", to);
+                .bind("from", fromStr)
+                .bind("to", toStr);
 
         if (referenceCode != null && !referenceCode.isBlank()) spec = spec.bind("referenceCode", referenceCode);
         if (colorDial != null && !colorDial.isBlank()) spec = spec.bind("colorDial", colorDial);
@@ -131,6 +138,7 @@ public class WatchService {
 
         return spec.map(this::mapRowToWatch).all().collectList();
     }
+
 
     public Mono<List<WatchEntity>> getWatchByReference(String reference) {
         return getLatestAsOfDate()
