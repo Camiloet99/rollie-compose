@@ -38,11 +38,11 @@ public class WatchController {
                 ));
     }
 
-    @PostMapping("/search/window/{window}")
+    @PostMapping("/search")
     public Mono<ResponseEntity<ResponseBody<List<WatchEntity>>>> searchWatches(
             @RequestBody WatchSearchRequest request,
             @RequestParam Long userId,
-            @PathVariable(required = false) String window
+            @RequestParam(required = false) String window
     ) {
         return searchService.validateSearchLimit(userId)
                 .then(watchService.searchWatches(request, window))
