@@ -1,3 +1,4 @@
+// src/components/search/SearchForm.jsx
 import React from "react";
 import { Button, Form, Row, Col, Spinner } from "react-bootstrap";
 import { FaSearch, FaTimesCircle } from "react-icons/fa";
@@ -39,7 +40,6 @@ export default function SearchForm({
 
   return (
     <Form onKeyDown={handleKeyDown}>
-      {/* ===== BASIC: SOLO Reference + Data from ===== */}
       <Row className="g-3 align-items-end">
         {/* Reference Number */}
         <Col md={6} lg={6}>
@@ -126,7 +126,6 @@ export default function SearchForm({
         </Col>
       </Row>
 
-      {/* ===== ADVANCED ===== */}
       {showAdvanced && (
         <Row className="g-3 mt-1">
           {/* Color */}
@@ -158,7 +157,6 @@ export default function SearchForm({
                 <option value="like_new">Like New</option>
                 <option value="very_good">Very Good</option>
                 <option value="good">Good</option>
-                <option value="fair">Fair</option>
               </Form.Select>
             </Form.Group>
           </Col>
