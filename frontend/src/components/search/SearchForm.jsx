@@ -9,7 +9,7 @@ import ReferenceSuggestions from "./ReferenceSuggestions";
  *  - onSubmit, loading
  *  - showAdvanced, setShowAdvanced
  *  - autocompleteEnabled, suggestions, suggestionsOpen, suggestionsLoading
- *  - onPickSuggestion: (value, setFilters) => void   // 👈 NUEVO
+ *  - onPickSuggestion: (value, setFilters) => void
  */
 export default function SearchForm({
   filters,
@@ -22,7 +22,7 @@ export default function SearchForm({
   suggestions = [],
   suggestionsOpen = false,
   suggestionsLoading = false,
-  onPickSuggestion, // 👈 NUEVO
+  onPickSuggestion,
 }) {
   const referenceInputRef = useRef(null);
 
@@ -38,10 +38,6 @@ export default function SearchForm({
     }
   };
 
-  const handleWindowChange = (e) => {
-    setFilters((prev) => ({ ...prev, window: e.target.value }));
-  };
-
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -51,10 +47,10 @@ export default function SearchForm({
 
   return (
     <Form onKeyDown={handleKeyDown}>
-      {/* ===== BASIC: SOLO Reference + Data from ===== */}
+      {/* ===== BASIC: SOLO Reference ===== */}
       <Row className="g-3 align-items-end">
         {/* Reference Number */}
-        <Col md={6} lg={6}>
+        <Col md={8} lg={8}>
           <Form.Group controlId="reference">
             <Form.Label>Reference Number</Form.Label>
             <div className="position-relative">
@@ -84,13 +80,10 @@ export default function SearchForm({
                   items={suggestions}
                   onPick={(ref) => {
                     if (typeof onPickSuggestion === "function") {
-                      // el contenedor cerrará el dropdown (setSuggestionsOpen(false) + limpiar items)
-                      onPickSuggestion(ref, setFilters);
+                      onPickSuggestion(ref, setFilters); // cierra dropdown en el contenedor
                     } else {
-                      // fallback: al menos completar el input aquí
                       setFilters((p) => ({ ...p, reference: ref }));
                     }
-                    // reenfocar input
                     if (referenceInputRef.current) {
                       referenceInputRef.current.focus();
                       try {
@@ -102,23 +95,6 @@ export default function SearchForm({
                 />
               )}
             </div>
-          </Form.Group>
-        </Col>
-
-        {/* Data from (window) */}
-        <Col md={2} lg={2}>
-          <Form.Group controlId="window">
-            <Form.Label>Data from</Form.Label>
-            <Form.Select
-              name="window"
-              value={filters.window || "today"}
-              onChange={handleWindowChange}
-              disabled={loading}
-            >
-              <option value="today">Today</option>
-              <option value="7d">Last 7 days (avg)</option>
-              <option value="15d">Last 15 days (avg)</option>
-            </Form.Select>
           </Form.Group>
         </Col>
 

@@ -61,6 +61,53 @@ public class WatchService {
                 });
     }
 
+    // ✅ Java 11 compatible
+    private Mono<LocalDate> mapMaxDate(Object v) {
+        if (v == null) return Mono.empty();
+
+        if (v instanceof LocalDate) {
+            return Mono.just((LocalDate) v);
+        }
+        if (v instanceof java.sql.Date) {
+            return Mono.just(((java.sql.Date) v).toLocalDate());
+        }
+        if (v instanceof java.time.LocalDateTime) {
+            return Mono.just(((java.time.LocalDateTime) v).toLocalDate());
+        }
+        if (v instanceof java.sql.Timestamp) {
+            return Mono.just(((java.sql.Timestamp) v).toLocalDateTime().toLocalDate());
+        }
+        if (v instanceof String) {
+            String s = (String) v;
+            try {
+                if (s.length() >= 10) s = s.substring(0, 10); // "yyyy-MM-dd"
+                return Mono.just(LocalDate.parse(s));
+            } catch (Exception ignore) {
+                return Mono.empty();
+            }
+        }
+
+        // Fallback por si viene otro tipo: intentar parsear toString()
+        try {
+            String s = v.toString();
+            if (s.length() >= 10) s = s.substring(0, 10);
+            return Mono.just(LocalDate.parse(s));
+        } catch (Exception ignore) {
+            return Mono.empty();
+        }
+    }
+
+    private Mono<LocalDate> getLatestAsOfDateForReference(String reference) {
+        return databaseClient.sql(
+                        "SELECT MAX(as_of_date) AS max_date " +
+                                "FROM watches WHERE UPPER(reference_code) = UPPER(:ref)"
+                )
+                .bind("ref", reference.trim())
+                .fetch()
+                .one()
+                .flatMap(map -> mapMaxDate(map.get("max_date")));
+    }
+
     private Mono<List<WatchEntity>> searchAndAggregateByWindow(WatchSearchRequest req, LocalDate latest, int days) {
         LocalDate from = latest.minusDays(days - 1);
         LocalDate to = latest;
@@ -140,13 +187,13 @@ public class WatchService {
     }
 
     public Mono<List<WatchEntity>> getWatchByReference(String reference, String window) {
-        return getLatestAsOfDate()
-                .flatMap(latest ->
-                        watchRepository.findByReferenceCode(reference)
-                                .filter(w -> latest.equals(w.getAsOfDate()))
-                                .collectList()
-                )
-                .flatMap(this::applyMarkup)
+        return getLatestAsOfDateForReference(reference)
+                .flatMap(latestForRef -> {
+                    if (latestForRef == null) return Mono.just(List.<WatchEntity>of());
+                    return executeSearchWithAsOf(
+                            reference, null, null, null, null, null, null, null, latestForRef
+                    ).flatMap(this::applyMarkup);
+                })
                 .switchIfEmpty(Mono.just(List.of()));
     }
 

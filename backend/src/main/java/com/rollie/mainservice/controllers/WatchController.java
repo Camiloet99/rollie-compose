@@ -28,7 +28,7 @@ public class WatchController {
     public Mono<ResponseEntity<ResponseBody<List<WatchEntity>>>> getWatchByReference(
             @PathVariable String reference,
             @RequestParam Long userId,
-            @RequestParam(required = false) String window
+            @PathVariable(required = false) String window
     ) {
         return searchService.validateSearchLimit(userId)
                 .then(watchService.getWatchByReference(reference, window))
@@ -42,7 +42,7 @@ public class WatchController {
     public Mono<ResponseEntity<ResponseBody<List<WatchEntity>>>> searchWatches(
             @RequestBody WatchSearchRequest request,
             @RequestParam Long userId,
-            @RequestParam(required = false) String window
+            @PathVariable(required = false) String window
     ) {
         return searchService.validateSearchLimit(userId)
                 .then(watchService.searchWatches(request, window))

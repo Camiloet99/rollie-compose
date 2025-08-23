@@ -38,7 +38,7 @@ const DEFAULT_FILTERS = {
   priceMax: "",
   currency: "",
   extraInfo: "",
-  window: "today",
+  window: "today", // ahora vive en Advanced
   adv: "",
 };
 
@@ -72,7 +72,6 @@ export default function Search() {
     }
   }, [userTier]);
 
-  // ---- autocomplete: debounce + abort ----
   const [referenceSuggestions, setReferenceSuggestions] = useState([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
@@ -95,7 +94,6 @@ export default function Search() {
     setSuggestionsLoading(true);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
-      // abort anterior
       if (abortRef.current) abortRef.current.abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -125,44 +123,45 @@ export default function Search() {
     setSuggestionsOpen(false);
   };
 
+  // Persistir el flag "adv" en la URL
   useEffect(() => {
     setFilters((prev) => ({ ...prev, adv: showAdvanced ? "1" : "" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAdvanced]);
 
+  // Ejecuta la búsqueda; window se toma de Advanced solo si Advanced está activo
   const runSearch = async (activeFilters) => {
+    const ref = activeFilters.reference?.trim();
+
+    // Si Advanced está visible y habilitado, respetamos el window del Advanced; si no, forzamos "today"
+    const win =
+      showAdvancedEnabled && showAdvanced
+        ? (activeFilters.window || "today").toLowerCase()
+        : "today";
+
+    // BÁSICO (GET): por referencia
+    if (!showAdvancedEnabled || !showAdvanced) {
+      if (!ref) return [];
+      return await getWatchByReference(ref, user.userId, win); // GET /watches/{ref}/window/{win}
+    }
+
+    // AVANZADO (POST): filtros + window como query param
     const payload = {
-      referenceCode: activeFilters.reference?.trim() || null,
-      colorDial:
-        showAdvancedEnabled && showAdvanced
-          ? activeFilters.color || null
-          : null,
-      productionYear:
-        showAdvancedEnabled && showAdvanced && activeFilters.year
-          ? parseInt(activeFilters.year)
-          : null,
-      condition:
-        showAdvancedEnabled && showAdvanced
-          ? activeFilters.condition || null
-          : null,
-      minPrice:
-        showAdvancedEnabled && showAdvanced && activeFilters.priceMin
-          ? parseFloat(activeFilters.priceMin)
-          : null,
-      maxPrice:
-        showAdvancedEnabled && showAdvanced && activeFilters.priceMax
-          ? parseFloat(activeFilters.priceMax)
-          : null,
-      currency:
-        showAdvancedEnabled && showAdvanced
-          ? activeFilters.currency || null
-          : null,
-      watchInfo:
-        showAdvancedEnabled && showAdvanced
-          ? activeFilters.extraInfo || null
-          : null,
-      window: activeFilters.window || "today",
+      referenceCode: ref || null,
+      colorDial: activeFilters.color || null,
+      productionYear: activeFilters.year ? parseInt(activeFilters.year) : null,
+      condition: activeFilters.condition || null,
+      minPrice: activeFilters.priceMin
+        ? parseFloat(activeFilters.priceMin)
+        : null,
+      maxPrice: activeFilters.priceMax
+        ? parseFloat(activeFilters.priceMax)
+        : null,
+      currency: activeFilters.currency || null,
+      watchInfo: activeFilters.extraInfo || null,
+      // window NO va en el body
     };
-    return await searchWatches(payload, user.userId);
+    return await searchWatches(payload, user.userId, win); // POST ?window=win
   };
 
   const handleSearch = async (e) => {
@@ -203,6 +202,8 @@ export default function Search() {
     setFilters(prevFilters); // también actualizará la URL
     try {
       setLoading(true);
+
+      // OJO: window ya no decide si es avanzado
       const isAdvanced =
         showAdvancedEnabled &&
         (prevFilters.color?.length ||
@@ -211,13 +212,13 @@ export default function Search() {
           prevFilters.priceMin?.length ||
           prevFilters.priceMax?.length ||
           prevFilters.currency?.length ||
-          prevFilters.window?.length ||
           prevFilters.extraInfo?.length);
 
       setShowAdvanced(Boolean(isAdvanced));
+
       const fetchedResults = await runSearch({
         ...prevFilters,
-        adv: undefined,
+        adv: undefined, // limpiar flag interno
       });
 
       setLimitExceeded(false);

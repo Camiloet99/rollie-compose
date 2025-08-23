@@ -7,6 +7,23 @@ export default function AdvancedFilters({
 }) {
   return (
     <Row className="g-3 mt-3">
+      {/* Data from (window) */}
+      <Col md={3}>
+        <Form.Group controlId="window">
+          <Form.Label>Data from</Form.Label>
+          <Form.Select
+            name="window"
+            value={filters.window || "today"}
+            onChange={handleChange}
+            disabled={loading}
+          >
+            <option value="today">Today</option>
+            <option value="7d">Last 7 days (avg)</option>
+            <option value="15d">Last 15 days (avg)</option>
+          </Form.Select>
+        </Form.Group>
+      </Col>
+
       {/* Color */}
       <Col md={3}>
         <Form.Group controlId="color">
