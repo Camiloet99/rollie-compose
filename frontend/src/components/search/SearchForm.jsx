@@ -1,4 +1,3 @@
-// src/components/search/SearchForm.jsx
 import React from "react";
 import { Button, Form, Row, Col, Spinner } from "react-bootstrap";
 import { FaSearch, FaTimesCircle } from "react-icons/fa";
@@ -78,7 +77,7 @@ export default function SearchForm({
         </Col>
 
         {/* Data from (window) */}
-        <Col md={4} lg={4}>
+        <Col md={2} lg={2}>
           <Form.Group controlId="window">
             <Form.Label>Data from</Form.Label>
             <Form.Select
