@@ -179,7 +179,7 @@ public class WatchService {
 
     public reactor.core.publisher.Mono<java.util.List<String>> autocompleteReference(String prefix) {
         if (prefix == null || prefix.isBlank()) return reactor.core.publisher.Mono.just(java.util.List.of());
-        String cleaned = escapeLike(prefix.trim());   // opcional pero recomendado
+        String cleaned = escapeLike(prefix.trim());
         int limit = 15;
         return watchRepository.autocompleteLatestRefs(cleaned, limit).collectList();
     }
