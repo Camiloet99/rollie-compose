@@ -1,15 +1,23 @@
+// src/components/search/ReferenceSuggestions.jsx
 import { memo } from "react";
 
 function RowSkeleton() {
   return <div className="skeleton sk-h-20 sk-w-full sk-mb-1" />;
 }
 
-function SuggestionRow({ text, onClick }) {
+function SuggestionRow({ text, onPick }) {
+  const handleMouseDown = (e) => {
+    // Evita que el input haga blur antes de ejecutar la selección
+    e.preventDefault();
+    onPick?.();
+  };
+
   return (
     <div
       className="px-3 py-2 hover-bg-light text-muted"
       style={{ cursor: "pointer" }}
-      onClick={onClick}
+      role="option"
+      onMouseDown={handleMouseDown}
     >
       {text}
     </div>
@@ -41,7 +49,7 @@ export default memo(function ReferenceSuggestions({
           <SuggestionRow
             key={`${s}-${idx}`}
             text={s}
-            onClick={() => onPick(s)}
+            onPick={() => onPick(s)}
           />
         ))
       ) : (

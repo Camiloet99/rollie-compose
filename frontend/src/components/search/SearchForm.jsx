@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import { Button, Form, Row, Col, Spinner } from "react-bootstrap";
 import { FaSearch, FaTimesCircle } from "react-icons/fa";
 import ReferenceSuggestions from "./ReferenceSuggestions";
@@ -22,6 +22,8 @@ export default function SearchForm({
   suggestionsOpen = false,
   suggestionsLoading = false,
 }) {
+  const referenceInputRef = useRef(null);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
@@ -29,6 +31,9 @@ export default function SearchForm({
 
   const clearField = (name) => {
     setFilters((prev) => ({ ...prev, [name]: "" }));
+    if (name === "reference" && referenceInputRef.current) {
+      referenceInputRef.current.focus();
+    }
   };
 
   const handleWindowChange = (e) => {
@@ -42,6 +47,28 @@ export default function SearchForm({
     }
   };
 
+  // 👇 usado por ReferenceSuggestions
+  const handleSuggestionSelect = (val) => {
+    const ref =
+      typeof val === "string"
+        ? val
+        : val?.value ?? val?.reference ?? val?.reference_code ?? "";
+    if (!ref) return;
+
+    setFilters((prev) => ({ ...prev, reference: ref }));
+
+    // re-enfoca y mueve el cursor al final (detalle UX)
+    if (referenceInputRef.current) {
+      referenceInputRef.current.focus();
+      const el = referenceInputRef.current;
+      const end = ref.length;
+      // setSelectionRange puede fallar en input number; aquí es text
+      try {
+        el.setSelectionRange(end, end);
+      } catch (_) {}
+    }
+  };
+
   return (
     <Form onKeyDown={handleKeyDown}>
       {/* ===== BASIC: SOLO Reference + Data from ===== */}
@@ -52,6 +79,7 @@ export default function SearchForm({
             <Form.Label>Reference Number</Form.Label>
             <div className="position-relative">
               <Form.Control
+                ref={referenceInputRef}
                 type="text"
                 name="reference"
                 value={filters.reference || ""}
@@ -74,7 +102,7 @@ export default function SearchForm({
                   open={suggestionsOpen}
                   loading={suggestionsLoading}
                   items={suggestions}
-                  onSelect={(ref) =>
+                  onPick={(ref) =>
                     setFilters((p) => ({ ...p, reference: ref }))
                   }
                 />
