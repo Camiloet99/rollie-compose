@@ -37,7 +37,7 @@ public class SearchService {
                     return searchLogRepository.countTodaySearchesByUserId(user.getUserId())
                             .flatMap(count -> {
                                 if (count >= limit) {
-                                    return Mono.error(new RuntimeException("ERR01 - Search limit exceeded"));
+                                    return Mono.error(new RuntimeException("ERR01 - Search exceeded"));
                                 }
                                 return Mono.empty();
                             });

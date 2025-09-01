@@ -233,7 +233,6 @@ def process_watch_data(file_path):
     
     df_cleaned = df_cleaned.drop_duplicates().reset_index(drop=True)
     
-        # === Paso extra: Eliminar palabras irrelevantes de la columna Reference ===
     stop_words = [
         "available", "may", "june", "july", "august", "september", "october",
         "november", "december", "both", "hold", "not", "no#", "no"
