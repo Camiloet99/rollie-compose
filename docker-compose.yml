@@ -14,9 +14,6 @@ services:
       DB_USER: root
       DB_PASSWORD: 1152225289
       PYTHON_SERVICE_URL: http://python-service:8000
-    depends_on:
-      python-service:
-        condition: service_healthy
 
   python-service:
     build: ./python-service
@@ -42,6 +39,3 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-    depends_on:
-      backend:
-        condition: service_started
