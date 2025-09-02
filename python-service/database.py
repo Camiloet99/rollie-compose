@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.exc import OperationalError
 
 # Cadena de conexión
-DATABASE_URL = "mysql+pymysql://root:1152225289@mysql:3306/rollie"
+DATABASE_URL = "mysql+pymysql://root:1152225289@rollie-database.cjckiy2o8x92.us-east-2.rds.amazonaws.com:3306/rollie?charset=utf8mb4"
 
 # Crear engine
 engine = create_engine(DATABASE_URL)

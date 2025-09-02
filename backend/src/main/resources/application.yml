@@ -26,12 +26,10 @@ logging:
 spring:
   r2dbc:
     show-sql: true
-    url: r2dbc:pool:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:rollie}?serverTimezone=UTC
-    username: ${DB_USER:root}
-    password: ${DB_PASSWORD:1152225289}
+    url: r2dbc:pool:mysql://${DB_HOST}:${DB_PORT}/${DB_NAME}?sslMode=REQUIRED&serverTimezone=UTC
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
 
 python:
   service:
     url: ${PYTHON_SERVICE_URL:http://localhost:8000}
-
-
