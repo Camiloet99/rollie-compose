@@ -34,7 +34,7 @@ services:
     build:
       context: ./frontend
       args:
-        REACT_APP_API_URL: http://18.191.173.28:8080
+        REACT_APP_API_URL: http://18.217.28.151:8080
     container_name: frontend
     restart: unless-stopped
     ports:
