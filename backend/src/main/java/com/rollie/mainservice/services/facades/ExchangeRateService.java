@@ -27,7 +27,6 @@ public class ExchangeRateService {
             .baseUrl(BASE_URL)
             .build();
 
-    // key: fromCurrency|date (e.g. EUR|2025-08-04)
     private final Map<String, ExchangeRateCacheEntry> cache = new ConcurrentHashMap<>();
 
     private static final Duration CACHE_DURATION = Duration.ofDays(2);

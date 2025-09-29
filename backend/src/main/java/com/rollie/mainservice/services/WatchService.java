@@ -13,13 +13,12 @@ import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.function.Tuple2;
+import reactor.util.function.Tuples;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -127,7 +126,7 @@ public class WatchService {
                             req.getCurrency(), req.getWatchInfo(), from, to
                     )
                             .flatMap(this::applyMarkup)
-                            .map(this::aggregateByReferenceAvg);
+                            .flatMap(this::aggregateByReferenceAvgUSD);
                 });
     }
 
@@ -444,57 +443,71 @@ public class WatchService {
         );
     }
 
-    private List<WatchEntity> aggregateByReferenceAvg(List<WatchEntity> rows) {
-        if (rows == null || rows.isEmpty()) return List.of();
+    public Mono<List<WatchEntity>> aggregateByReferenceAvgUSD(List<WatchEntity> rows) {
+        if (rows == null || rows.isEmpty()) return Mono.just(List.of());
 
-        Map<String, Double> avgByRef = rows.stream()
-                .filter(w -> w.getReferenceCode() != null && w.getCost() != null)
-                .collect(Collectors.groupingBy(
-                        WatchEntity::getReferenceCode,
-                        Collectors.averagingDouble(WatchEntity::getCost)
-                ));
+        return Flux.fromIterable(rows)
+                .filter(w -> w.getReferenceCode() != null && w.getCost() != null && w.getCurrency() != null)
+                .flatMap(w ->
+                        exchangeRateService.convertToUSD(
+                                        w.getCurrency(),
+                                        w.getCost(),
+                                        chooseDateForFx(w)
+                                )
+                                .map(usd -> Tuples.of(w, usd))
+                )
+                .collectMultimap(t -> t.getT1().getReferenceCode())
+                .map(grouped -> {
+                    Comparator<WatchEntity> latestComparator = Comparator
+                            .comparing(
+                                    WatchEntity::getAsOfDate,
+                                    Comparator.nullsLast(Comparator.naturalOrder())
+                            )
+                            .thenComparing(
+                                    WatchEntity::getCreatedAt,
+                                    Comparator.nullsLast(Comparator.naturalOrder())
+                            );
+                    List<WatchEntity> result = new ArrayList<>(grouped.size());
 
-        Map<String, WatchEntity> latestByRef = rows.stream()
-                .collect(Collectors.toMap(
-                        WatchEntity::getReferenceCode,
-                        w -> w,
-                        (w1, w2) -> {
-                            LocalDate d1 = w1.getAsOfDate();
-                            LocalDate d2 = w2.getAsOfDate();
-                            if (d1 == null && d2 != null) return w2;
-                            if (d2 == null && d1 != null) return w1;
-                            if (d1 != null && d2 != null) {
-                                int cmp = d1.compareTo(d2);
-                                if (cmp != 0) return (cmp >= 0) ? w1 : w2;
-                            }
-                            var c1 = w1.getCreatedAt();
-                            var c2 = w2.getCreatedAt();
-                            if (c1 == null && c2 != null) return w2;
-                            if (c2 == null && c1 != null) return w1;
-                            if (c1 != null && c2 != null) return (c1.isAfter(c2)) ? w1 : w2;
-                            return w1;
-                        }
-                ));
+                    for (Map.Entry<String, Collection<Tuple2<WatchEntity, Double>>> e : grouped.entrySet()) {
+                        String ref = e.getKey();
+                        Collection<Tuple2<WatchEntity, Double>> tuples = e.getValue();
 
-        return latestByRef.entrySet().stream()
-                .map(e -> {
-                    WatchEntity base = e.getValue();
-                    Double avg = avgByRef.get(e.getKey());
-                    return WatchEntity.builder()
-                            .id(base.getId())
-                            .referenceCode(base.getReferenceCode())
-                            .colorDial(base.getColorDial())
-                            .productionYear(base.getProductionYear())
-                            .condition(base.getCondition())
-                            .cost(avg)                 // 👈 promedio
-                            .createdAt(base.getCreatedAt())
-                            .currency("USD")          // 👈 ya convertido
-                            .extraInfo(base.getExtraInfo())
-                            .asOfDate(base.getAsOfDate()) // puedes optar por latest del rango
-                            .build();
-                })
-                .sorted(Comparator.comparing(WatchEntity::getReferenceCode))
-                .collect(Collectors.toList());
+                        double avgUsd = tuples.stream()
+                                .mapToDouble(Tuple2::getT2)
+                                .average()
+                                .orElse(0.0);
+
+                        WatchEntity base = tuples.stream()
+                                .map(Tuple2::getT1)
+                                .max(latestComparator)
+                                .orElseGet(() -> tuples.iterator().next().getT1());
+
+                        WatchEntity aggregated = WatchEntity.builder()
+                                .id(base.getId())
+                                .referenceCode(base.getReferenceCode())
+                                .colorDial(base.getColorDial())
+                                .productionYear(base.getProductionYear())
+                                .condition(base.getCondition())
+                                .cost(avgUsd)
+                                .createdAt(base.getCreatedAt())
+                                .currency("USD")
+                                .extraInfo(base.getExtraInfo())
+                                .asOfDate(base.getAsOfDate())
+                                .build();
+
+                        result.add(aggregated);
+                    }
+
+                    result.sort(Comparator.comparing(WatchEntity::getReferenceCode, Comparator.nullsLast(String::compareTo)));
+                    return result;
+                });
     }
 
+    private LocalDate chooseDateForFx(WatchEntity w) {
+        if (w.getAsOfDate() != null) return w.getAsOfDate();
+        LocalDateTime created = w.getCreatedAt();
+        if (created != null) return created.toLocalDate();
+        return LocalDate.now();
+    }
 }
