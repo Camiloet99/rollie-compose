@@ -51,7 +51,7 @@ export default function WatchCard({ watch, priceTier }) {
           <div className="mb-1 text-muted small">
             <strong>Listed:</strong>{" "}
             {watch.createdAt
-              ? moment(watch.createdAt).format("MMM D, YYYY")
+              ? moment(watch.asOfDate).format("MMM D, YYYY")
               : "Unknown"}
           </div>
 
