@@ -1,5 +1,6 @@
 import { Row, Col, Form } from "react-bootstrap";
 
+// AdvancedFilters.jsx
 export default function AdvancedFilters({
   filters,
   handleChange,
@@ -7,17 +8,19 @@ export default function AdvancedFilters({
 }) {
   return (
     <Row className="g-3 mt-3">
-      {/* Data from (window) */}
+      {/* Average from (window) */}
       <Col md={3}>
         <Form.Group controlId="window">
-          <Form.Label>Data from</Form.Label>
+          <Form.Label>Average from</Form.Label>
           <Form.Select
             name="window"
-            value={filters.window || "today"}
+            /* OJO: permitimos vacío "" para "no average" */
+            value={filters.window ?? ""}
             onChange={handleChange}
             disabled={loading}
           >
-            <option value="today">Today</option>
+            <option value="">No average (raw)</option>
+            <option value="today">Today (avg)</option>
             <option value="7d">Last 7 days (avg)</option>
             <option value="15d">Last 15 days (avg)</option>
           </Form.Select>
