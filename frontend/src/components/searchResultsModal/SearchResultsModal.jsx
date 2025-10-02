@@ -41,43 +41,46 @@ export default function SearchResultsModal({
   const { setColorFilter, setConditionFilter, setExtraInfoFilter } = setFilters;
   const { colorOptions, conditionOptions, extraInfoOptions } = options;
 
+  // === LISTA QUE SE MUESTRA ===
+  // No filtramos a USD aquí: mostramos TODO lo que vino del backend (tras filtros del modal)
+  const displayResults = useMemo(
+    () =>
+      filteredResults && Array.isArray(filteredResults)
+        ? filteredResults
+        : results,
+    [filteredResults, results]
+  );
+
   // Referencias únicas de esta página (para las pills)
   const uniqueReferences = useMemo(() => {
     const set = new Set(
-      (results || [])
+      (displayResults || [])
         .map((w) => (w.referenceCode ?? w.reference_code ?? "").trim())
         .filter(Boolean)
     );
     return Array.from(set);
-  }, [results]);
+  }, [displayResults]);
 
-  // Trabajar solo con USD (ya que el backend normaliza y/o applyMarkup, pero reforzamos)
-  const usdResults = useMemo(
-    () => onlyUSD(filteredResults ?? []),
-    [filteredResults]
-  );
+  // === SOLO PARA BUCKETS/CLASIFICACIÓN ===
+  // Trabaja con USD únicamente para construir buckets (sin afectar lo que se muestra)
+  const usdForBuckets = useMemo(() => {
+    const usd = onlyUSD(displayResults ?? []);
+    return (usd || []).map((w) => ({
+      ...w,
+      reference_code: w.reference_code ?? w.referenceCode ?? "NOREF",
+    }));
+  }, [displayResults]);
 
-  // Normaliza a la forma esperada por usePriceBuckets (reference_code + cost)
-  const usdResultsForBuckets = useMemo(
-    () =>
-      (usdResults || []).map((w) => ({
-        ...w,
-        reference_code: w.reference_code ?? w.referenceCode ?? "NOREF",
-      })),
-    [usdResults]
-  );
-
-  // Calcula buckets para la página visible (puedes cambiar a dataset global si lo tienes en frontend)
-  const { classify } = usePriceBuckets(usdResultsForBuckets, {
+  const { classify } = usePriceBuckets(usdForBuckets, {
     method: "quantile",
     byReference: true,
     minGroup: 12,
   });
 
-  // Ordenar SOLO lo de la página mostrada (el backend ya paginó)
+  // Ordenar SOLO lo que se muestra (no uses usdResults aquí)
   const [sort, setSort] = useState("price_desc");
   const sortedResults = useMemo(() => {
-    const arr = [...usdResults];
+    const arr = [...(displayResults || [])];
     const num = (x) =>
       x === null || x === undefined || x === "" ? NaN : Number(x);
     switch (sort) {
@@ -96,7 +99,7 @@ export default function SearchResultsModal({
       default:
         return arr;
     }
-  }, [usdResults, sort]);
+  }, [displayResults, sort]);
 
   // Barra de paginación (arriba/abajo)
   const PaginationBar = () => {
@@ -105,7 +108,8 @@ export default function SearchResultsModal({
     return (
       <div className="d-flex flex-wrap align-items-center justify-content-between w-100 gap-2">
         <div className="text-muted small">
-          Showing <strong>{results.length}</strong> of <strong>{total}</strong>
+          Showing <strong>{displayResults.length}</strong> of{" "}
+          <strong>{total}</strong>
         </div>
 
         <div className="d-flex align-items-center gap-2">
@@ -157,7 +161,7 @@ export default function SearchResultsModal({
 
       <Modal.Body className="pt-0">
         {/* Toolbar superior (orden/paginación/filtros) */}
-        {!loading && results.length > 0 && (
+        {!loading && displayResults.length > 0 && (
           <div className="filter-row-sticky">
             <div className="results-toolbar d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
               {/* Orden */}
@@ -211,12 +215,12 @@ export default function SearchResultsModal({
               <WatchCardSkeleton key={i} />
             ))}
           </div>
-        ) : results.length === 0 ? (
+        ) : displayResults.length === 0 ? (
           <p className="text-center text-muted mt-4">No results found.</p>
         ) : (
           <div className="mt-3">
             {sortedResults.map((watch) => {
-              // Clasificación por buckets (por página) — espera { cost, reference_code }
+              // Clasificación por buckets — espera { cost, reference_code }
               const priceTier = classify({
                 cost: watch.cost,
                 reference_code:
@@ -241,7 +245,7 @@ export default function SearchResultsModal({
 
       <Modal.Footer className="border-0 pt-0">
         {/* Paginación abajo */}
-        {!loading && results.length > 0 && <PaginationBar />}
+        {!loading && displayResults.length > 0 && <PaginationBar />}
         <Button variant="secondary" onClick={onHide}>
           Close
         </Button>
