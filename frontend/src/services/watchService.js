@@ -3,18 +3,16 @@ import api from "./api";
 
 // Aceptamos solo these keys; fallback a 'today'
 const normalizeWindow = (win) => {
-  const v = String(win || "today").toLowerCase();
-  return v === "7d" || v === "15d" ? v : "today";
+  const v = String(win ?? "").toLowerCase();
+  if (v === "" || v === "today" || v === "7d" || v === "15d") return v;
+  return ""; // cualquier otra cosa => no average
 };
 
 // === 1) GET: por referencia con window como path ===
 export const getWatchByReference = async (reference, userId, page = 0, size = 20) => {
   const ref = encodeURIComponent(reference?.trim?.() || "");
   try {
-    const res = await api.get(`/watches/${ref}`, {
-      params: { userId, page, size },
-    });
-    // Ahora el backend devuelve PageResult
+    const res = await api.get(`/watches/${ref}`, { params: { userId, page, size } });    // Ahora el backend devuelve PageResult
     return res.data?.result || { items: [], total: 0, page, size, pages: 1, hasNext: false, hasPrev: false };
   } catch (err) {
     console.error("Error getting watch by reference:", err);
@@ -27,9 +25,9 @@ export const searchWatches = async (payload, userId, window = "today", page = 0,
   try {
     const win = normalizeWindow(window);
     const { window: _ignoreWindow, ...body } = payload || {};
-    const res = await api.post(`/watches/search`, body, {
-      params: { userId, window: win, page, size },
-    });
+    const params = { userId };
+    if (win) params.window = win; // solo si hay average
+    const res = await api.post(`/watches/search`, body, { params });
     return res.data?.result || { items: [], total: 0, page, size, pages: 1, hasNext: false, hasPrev: false };
   } catch (err) {
     console.error("Error searching watches:", err);

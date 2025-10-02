@@ -163,8 +163,8 @@ export default function Search() {
 
     const win =
       showAdvancedEnabled && showAdvanced
-        ? String(activeFilters.window ?? "today").toLowerCase()
-        : "today";
+        ? String(activeFilters.window ?? "").toLowerCase()
+        : "";
 
     if (!showAdvancedEnabled || !showAdvanced) {
       if (!ref) {
