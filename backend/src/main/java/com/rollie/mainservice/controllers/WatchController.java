@@ -43,8 +43,8 @@ public class WatchController {
     @PostMapping("/search")
     public Mono<ResponseEntity<ResponseBody<PageResult<WatchEntity>>>> searchOrSummary(
             @RequestBody WatchSearchRequest request,
-            @RequestParam(name = "window", required = false) String window,
-            @RequestParam(name = "window") Long userId,
+            @RequestParam(name = "userId") Long userId,
+            @RequestParam(name = "window", required = false) String window, // "", today, 7d, 15d
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
