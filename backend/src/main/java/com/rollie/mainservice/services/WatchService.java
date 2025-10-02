@@ -1,6 +1,7 @@
 package com.rollie.mainservice.services;
 
 import com.rollie.mainservice.entities.WatchEntity;
+import com.rollie.mainservice.models.PageResult;
 import com.rollie.mainservice.models.WatchPriceHistoryResponse;
 import com.rollie.mainservice.models.WatchReferenceSummaryResponse;
 import com.rollie.mainservice.models.requests.WatchSearchRequest;
@@ -30,7 +31,6 @@ public class WatchService {
     private final AppConfigRepository appConfigRepository;
     private final ExchangeRateService exchangeRateService;
 
-    // WatchService.java
     public Mono<List<WatchEntity>> searchWatches(WatchSearchRequest req, String window) {
         final String win = (window == null || window.isBlank())
                 ? "today"
@@ -54,10 +54,7 @@ public class WatchService {
                             ).flatMap(this::applyMarkup);
                     }
                 })
-                .onErrorResume(e -> {
-                    // log.warn("searchWatches failed", e);
-                    return Mono.just(List.<WatchEntity>of());
-                });
+                .onErrorResume(e -> Mono.just(List.of()));
     }
 
     private Mono<LocalDate> mapMaxDate(Object v) {
@@ -190,6 +187,55 @@ public class WatchService {
 
         return spec.map(this::mapRowToWatch).all().collectList();
     }
+
+    public Mono<PageResult<WatchEntity>> getWatchByReference(String reference, int page, int size) {
+        int safeSize = Math.max(1, Math.min(size, 200)); // cap defensivo
+        int safePage = Math.max(0, page);
+        int offset = safePage * safeSize;
+
+        Mono<Long> totalMono = countByReference(reference);
+
+        Mono<List<WatchEntity>> itemsMono = findByReferencePaged(reference, safeSize, offset)
+                .flatMap(this::applyMarkup);
+
+        return Mono.zip(totalMono, itemsMono)
+                .map(tuple -> PageResult.of(tuple.getT2(), tuple.getT1(), safePage, safeSize));
+    }
+
+    private Mono<Long> countByReference(String reference) {
+        String sql = "SELECT COUNT(*) AS c FROM watches WHERE reference_code = :referenceCode";
+        return databaseClient.sql(sql)
+                .bind("referenceCode", reference)
+                .map((row, meta) -> {
+                    Object v = row.get("c");
+                    if (v instanceof Number) {
+                        return ((Number) v).longValue();
+                    }
+                    return Long.parseLong(String.valueOf(v));
+                })
+                .one();
+    }
+
+    private Mono<List<WatchEntity>> findByReferencePaged(String reference, int limit, int offset) {
+        String sql = String.format(
+                "SELECT * FROM watches WHERE reference_code = :referenceCode ORDER BY id DESC LIMIT %d OFFSET %d",
+                limit, offset
+        );
+
+        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
+                .bind("referenceCode", reference);
+
+        spec = spec.filter((statement, next) -> {
+            statement.fetchSize(1000);
+            return next.execute(statement);
+        });
+
+        return spec.map(this::mapRowToWatch)
+                .all()
+                .collectList();
+    }
+
+
 
     public Mono<List<WatchEntity>> getWatchByReference(String reference, String window) {
         return getLatestAsOfDateForReference(reference)
@@ -336,11 +382,8 @@ public class WatchService {
             String condition, Double minPrice, Double maxPrice,
             String currency, String watchInfo, LocalDate asOfDate
     ) {
-        StringBuilder sql = new StringBuilder("SELECT * FROM watches WHERE as_of_date = :asOfDate");
+        StringBuilder sql = new StringBuilder("SELECT * FROM watches WHERE reference_code = :referenceCode");
 
-        if (referenceCode != null && !referenceCode.trim().isEmpty()) {
-            sql.append(" AND reference_code = :referenceCode");
-        }
         if (colorDial != null && !colorDial.trim().isEmpty()) {
             sql.append(" AND color_dial = :colorDial");
         }
@@ -364,9 +407,8 @@ public class WatchService {
         }
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql.toString())
-                .bind("asOfDate", asOfDate);
+                .bind("referenceCode", referenceCode);
 
-        if (referenceCode != null && !referenceCode.trim().isEmpty()) spec = spec.bind("referenceCode", referenceCode);
         if (colorDial != null && !colorDial.trim().isEmpty()) spec = spec.bind("colorDial", colorDial);
         if (year != null) spec = spec.bind("year", year);
         if (condition != null && !condition.trim().isEmpty()) spec = spec.bind("condition", condition);

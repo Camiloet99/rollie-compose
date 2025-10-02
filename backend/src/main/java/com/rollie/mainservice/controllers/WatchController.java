@@ -1,6 +1,7 @@
 package com.rollie.mainservice.controllers;
 
 import com.rollie.mainservice.entities.WatchEntity;
+import com.rollie.mainservice.models.PageResult;
 import com.rollie.mainservice.models.ResponseBody;
 import com.rollie.mainservice.models.WatchPriceHistoryResponse;
 import com.rollie.mainservice.models.WatchReferenceSummaryResponse;
@@ -38,17 +39,18 @@ public class WatchController {
                 ));
     }
 
-    @PostMapping("/search")
-    public Mono<ResponseEntity<ResponseBody<List<WatchEntity>>>> searchWatches(
-            @RequestBody WatchSearchRequest request,
+    @GetMapping("/{reference}")
+    public Mono<ResponseEntity<ResponseBody<PageResult<WatchEntity>>>> getWatchByReference(
+            @PathVariable String reference,
             @RequestParam Long userId,
-            @RequestParam(required = false) String window
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
     ) {
         return searchService.validateSearchLimit(userId)
-                .then(watchService.searchWatches(request, window))
-                .flatMap(results -> Mono.defer(() ->
-                        searchService.logSearch(userId, request.getReferenceCode())
-                                .thenReturn(ControllerUtils.ok(results))
+                .then(watchService.getWatchByReference(reference, page, size))
+                .flatMap(pageResult -> Mono.defer(() ->
+                        searchService.logSearch(userId, reference)
+                                .thenReturn(ControllerUtils.ok(pageResult))
                 ));
     }
 
