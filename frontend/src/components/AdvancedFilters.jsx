@@ -14,7 +14,6 @@ export default function AdvancedFilters({
           <Form.Label>Average from</Form.Label>
           <Form.Select
             name="window"
-            /* OJO: permitimos vacío "" para "no average" */
             value={filters.window ?? ""}
             onChange={handleChange}
             disabled={loading}

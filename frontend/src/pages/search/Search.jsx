@@ -38,7 +38,7 @@ const DEFAULT_FILTERS = {
   priceMax: "",
   currency: "",
   extraInfo: "",
-  window: "today", // ahora vive en Advanced
+  window: "",
   adv: "",
 };
 
