@@ -13,11 +13,26 @@ import usePriceBuckets from "../../hooks/usePriceBuckets";
 export default function SearchResultsModal({
   show,
   onHide,
-  results = [],
+  pageResult = {
+    items: [],
+    total: 0,
+    page: 0,
+    size: 20,
+    pages: 1,
+    hasNext: false,
+    hasPrev: false,
+  },
   loading = false,
+  onChangePage = () => {},
+  onChangeSize = () => {},
 }) {
+  // Items de la página actual (ya paginados por el backend)
+  const results = pageResult.items || [];
+
+  // Favoritos (optimistic)
   const { isFavorite, toggleFavorite, isInFlight } = useFavoritesOptimistic();
 
+  // Filtros dentro del modal (color / condition / extraInfo, etc.)
   const { filters, setFilters, options, filteredResults } = useResultFilters(
     results,
     show
@@ -26,27 +41,40 @@ export default function SearchResultsModal({
   const { setColorFilter, setConditionFilter, setExtraInfoFilter } = setFilters;
   const { colorOptions, conditionOptions, extraInfoOptions } = options;
 
+  // Referencias únicas de esta página (para las pills)
   const uniqueReferences = useMemo(() => {
     const set = new Set(
-      results.map((w) => w.referenceCode?.trim()).filter(Boolean)
+      (results || [])
+        .map((w) => (w.referenceCode ?? w.reference_code ?? "").trim())
+        .filter(Boolean)
     );
     return Array.from(set);
   }, [results]);
 
-  // Filtrar solo USD
+  // Trabajar solo con USD (ya que el backend normaliza y/o applyMarkup, pero reforzamos)
   const usdResults = useMemo(
     () => onlyUSD(filteredResults ?? []),
     [filteredResults]
   );
 
-  // Clasificación de precios
-  const { classify } = usePriceBuckets(usdResults, {
+  // Normaliza a la forma esperada por usePriceBuckets (reference_code + cost)
+  const usdResultsForBuckets = useMemo(
+    () =>
+      (usdResults || []).map((w) => ({
+        ...w,
+        reference_code: w.reference_code ?? w.referenceCode ?? "NOREF",
+      })),
+    [usdResults]
+  );
+
+  // Calcula buckets para la página visible (puedes cambiar a dataset global si lo tienes en frontend)
+  const { classify } = usePriceBuckets(usdResultsForBuckets, {
     method: "quantile",
     byReference: true,
     minGroup: 12,
   });
 
-  // Orden
+  // Ordenar SOLO lo de la página mostrada (el backend ya paginó)
   const [sort, setSort] = useState("price_desc");
   const sortedResults = useMemo(() => {
     const arr = [...usdResults];
@@ -70,6 +98,57 @@ export default function SearchResultsModal({
     }
   }, [usdResults, sort]);
 
+  // Barra de paginación (arriba/abajo)
+  const PaginationBar = () => {
+    const { page, pages, hasPrev, hasNext, size, total } = pageResult;
+
+    return (
+      <div className="d-flex flex-wrap align-items-center justify-content-between w-100 gap-2">
+        <div className="text-muted small">
+          Showing <strong>{results.length}</strong> of <strong>{total}</strong>
+        </div>
+
+        <div className="d-flex align-items-center gap-2">
+          <Form.Select
+            size="sm"
+            value={size}
+            onChange={(e) => onChangeSize(parseInt(e.target.value, 10))}
+            style={{ width: 120 }}
+            aria-label="Page size"
+          >
+            {[10, 20, 50, 100].map((opt) => (
+              <option key={opt} value={opt}>
+                {opt} / page
+              </option>
+            ))}
+          </Form.Select>
+
+          <div className="d-flex align-items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline-secondary"
+              disabled={!hasPrev || loading}
+              onClick={() => onChangePage(Math.max(0, page - 1))}
+            >
+              ‹ Prev
+            </Button>
+            <span className="small text-muted">
+              Page <strong>{page + 1}</strong> / {pages}
+            </span>
+            <Button
+              size="sm"
+              variant="outline-secondary"
+              disabled={!hasNext || loading}
+              onClick={() => onChangePage(page + 1)}
+            >
+              Next ›
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Modal show={show} onHide={onHide} size="xl" centered scrollable>
       <Modal.Header closeButton className="border-0 pb-0">
@@ -77,9 +156,11 @@ export default function SearchResultsModal({
       </Modal.Header>
 
       <Modal.Body className="pt-0">
+        {/* Toolbar superior (orden/paginación/filtros) */}
         {!loading && results.length > 0 && (
           <div className="filter-row-sticky">
             <div className="results-toolbar d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+              {/* Orden */}
               <div className="d-flex align-items-center gap-2 flex-wrap">
                 <Form.Select
                   size="sm"
@@ -94,8 +175,12 @@ export default function SearchResultsModal({
                   <option value="year_asc">Year: old → new</option>
                 </Form.Select>
               </div>
+
+              {/* Paginación arriba */}
+              <PaginationBar />
             </div>
 
+            {/* Filtros internos + referencia pills */}
             <div className="filters-section">
               <FiltersRow
                 colorFilter={colorFilter}
@@ -119,6 +204,7 @@ export default function SearchResultsModal({
           </div>
         )}
 
+        {/* Cuerpo (skeleton / vacío / cards) */}
         {loading ? (
           <div>
             {Array.from({ length: 8 }).map((_, i) => (
@@ -129,21 +215,33 @@ export default function SearchResultsModal({
           <p className="text-center text-muted mt-4">No results found.</p>
         ) : (
           <div className="mt-3">
-            {sortedResults.map((watch) => (
-              <WatchCard
-                key={
-                  watch.id ??
-                  `${watch.referenceCode}-${watch.createdAt ?? Math.random()}`
-                }
-                watch={watch}
-                priceTier={classify(watch)}
-              />
-            ))}
+            {sortedResults.map((watch) => {
+              // Clasificación por buckets (por página) — espera { cost, reference_code }
+              const priceTier = classify({
+                cost: watch.cost,
+                reference_code:
+                  watch.reference_code ?? watch.referenceCode ?? "NOREF",
+              });
+              return (
+                <WatchCard
+                  key={
+                    watch.id ??
+                    `${watch.referenceCode || watch.reference_code}-${
+                      watch.createdAt ?? Math.random()
+                    }`
+                  }
+                  watch={watch}
+                  priceTier={priceTier}
+                />
+              );
+            })}
           </div>
         )}
       </Modal.Body>
 
       <Modal.Footer className="border-0 pt-0">
+        {/* Paginación abajo */}
+        {!loading && results.length > 0 && <PaginationBar />}
         <Button variant="secondary" onClick={onHide}>
           Close
         </Button>

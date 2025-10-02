@@ -31,100 +31,172 @@ public class WatchService {
     private final AppConfigRepository appConfigRepository;
     private final ExchangeRateService exchangeRateService;
 
-    public Mono<List<WatchEntity>> searchWatches(WatchSearchRequest req, String window) {
-        final String win = (window == null || window.isBlank())
-                ? "today"
-                : window.trim().toLowerCase();
+    public Mono<PageResult<WatchEntity>> findAllByReference(String reference, int page, int size) {
+        int safeSize = Math.max(1, Math.min(size, 200));
+        int safePage = Math.max(0, page);
+        int offset   = safePage * safeSize;
 
-        return getLatestAsOfDate()
-                .flatMap(latest -> {
-                    if (latest == null) return Mono.just(List.<WatchEntity>of());
+        Mono<Long> totalMono = countByReference(reference);
+        Mono<List<WatchEntity>> itemsMono = findByReferencePaged(reference, safeSize, offset)
+                .flatMap(this::applyMarkup);
 
-                    switch (win) {
-                        case "7d":
-                            return searchAndAggregateByWindow(req, latest, 7);
-                        case "15d":
-                            return searchAndAggregateByWindow(req, latest, 15);
-                        case "today":
-                        default:
-                            return executeSearchWithAsOf(
-                                    req.getReferenceCode(), req.getColorDial(), req.getProductionYear(),
-                                    req.getCondition(), req.getMinPrice(), req.getMaxPrice(),
-                                    req.getCurrency(), req.getWatchInfo(), latest
-                            ).flatMap(this::applyMarkup);
-                    }
+        return Mono.zip(totalMono, itemsMono)
+                .map(t -> PageResult.of(t.getT2(), t.getT1(), safePage, safeSize));
+    }
+
+    private Mono<Long> countByReference(String reference) {
+        String sql = "SELECT COUNT(*) AS c FROM watches WHERE UPPER(reference_code) = UPPER(:reference)";
+        return databaseClient.sql(sql)
+                .bind("reference", reference == null ? "" : reference.trim())
+                .map((row, meta) -> {
+                    Object v = row.get("c");
+                    if (v instanceof Number) return ((Number) v).longValue();
+                    return Long.parseLong(String.valueOf(v));
                 })
-                .onErrorResume(e -> Mono.just(List.of()));
+                .one();
     }
 
-    private Mono<LocalDate> mapMaxDate(Object v) {
-        if (v == null) return Mono.empty();
+    private Mono<List<WatchEntity>> findByReferencePaged(String reference, int limit, int offset) {
+        String sql = String.format(
+                "SELECT id, reference_code, color_dial, production_year, watch_condition, " +
+                        "       cost, created_at, currency, watch_info, as_of_date " +
+                        "FROM watches WHERE UPPER(reference_code) = UPPER(:reference) " +
+                        "ORDER BY created_at DESC, id DESC " +
+                        "LIMIT %d OFFSET %d", limit, offset
+        );
 
-        if (v instanceof LocalDate) {
-            return Mono.just((LocalDate) v);
-        }
-        if (v instanceof java.sql.Date) {
-            return Mono.just(((java.sql.Date) v).toLocalDate());
-        }
-        if (v instanceof java.time.LocalDateTime) {
-            return Mono.just(((java.time.LocalDateTime) v).toLocalDate());
-        }
-        if (v instanceof java.sql.Timestamp) {
-            return Mono.just(((java.sql.Timestamp) v).toLocalDateTime().toLocalDate());
-        }
-        if (v instanceof String) {
-            String s = (String) v;
-            try {
-                if (s.length() >= 10) s = s.substring(0, 10); // "yyyy-MM-dd"
-                return Mono.just(LocalDate.parse(s));
-            } catch (Exception ignore) {
-                return Mono.empty();
-            }
-        }
+        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
+                .bind("reference", reference == null ? "" : reference.trim());
 
-        // Fallback por si viene otro tipo: intentar parsear toString()
-        try {
-            String s = v.toString();
-            if (s.length() >= 10) s = s.substring(0, 10);
-            return Mono.just(LocalDate.parse(s));
-        } catch (Exception ignore) {
-            return Mono.empty();
-        }
+        spec = spec.filter((st, next) -> { st.fetchSize(1000); return next.execute(st); });
+
+        return spec.map(this::mapRowToWatch).all().collectList();
     }
 
-    private Mono<LocalDate> getLatestAsOfDateForReference(String reference) {
-        return databaseClient.sql(
-                        "SELECT MAX(as_of_date) AS max_date " +
-                                "FROM watches WHERE UPPER(reference_code) = UPPER(:ref)"
-                )
-                .bind("ref", reference.trim())
-                .fetch()
-                .one()
-                .flatMap(map -> mapMaxDate(map.get("max_date")));
+    public Mono<PageResult<WatchEntity>> searchOrSummary(WatchSearchRequest req, String windowRaw, int page, int size) {
+        int safeSize = Math.max(1, Math.min(size, 200));
+        int safePage = Math.max(0, page);
+        final String window = (windowRaw == null ? "" : windowRaw.trim().toLowerCase());
+
+        if ("today".equals(window) || "7d".equals(window) || "15d".equals(window)) {
+            LocalDate to = LocalDate.now();
+            int days = "today".equals(window) ? 1 : ("7d".equals(window) ? 7 : 15);
+            LocalDate from = to.minusDays(days - 1);
+
+            return executeSearchWithRange(
+                    req.getReferenceCode(),
+                    req.getColorDial(),
+                    req.getProductionYear(),
+                    req.getCondition(),
+                    req.getMinPrice(),
+                    req.getMaxPrice(),
+                    req.getCurrency(),
+                    req.getWatchInfo(),
+                    from, to
+            )
+                    .flatMap(this::applyMarkup)
+                    .flatMap(this::aggregateByReferenceAvgUSD)
+                    .map(list -> paginateInMemory(list, safePage, safeSize));
+        }
+
+        Mono<Long> totalMono = countSearchWithFilters(
+                req.getReferenceCode(), req.getColorDial(), req.getProductionYear(),
+                req.getCondition(), req.getMinPrice(), req.getMaxPrice(),
+                req.getCurrency(), req.getWatchInfo()
+        );
+
+        Mono<List<WatchEntity>> itemsMono = findByFiltersPaged(
+                req.getReferenceCode(), req.getColorDial(), req.getProductionYear(),
+                req.getCondition(), req.getMinPrice(), req.getMaxPrice(),
+                req.getCurrency(), req.getWatchInfo(),
+                safeSize, safePage * safeSize
+        ).flatMap(this::applyMarkup);
+
+        return Mono.zip(totalMono, itemsMono)
+                .map(t -> PageResult.of(t.getT2(), t.getT1(), safePage, safeSize));
     }
 
-    private Mono<LocalDate> resolveAnchorDate(String reference, LocalDate globalLatest) {
-        return getLatestAsOfDateForReference(reference)
-                .switchIfEmpty(Mono.justOrEmpty(globalLatest));
+    private Mono<Long> countSearchWithFilters(
+            String referenceCode, String colorDial, Integer productionYear,
+            String condition, Double minPrice, Double maxPrice,
+            String currency, String watchInfo
+    ) {
+        StringBuilder sb = new StringBuilder(
+                "SELECT COUNT(*) AS c FROM watches WHERE 1=1 "
+        );
+        if (nonEmpty(referenceCode)) sb.append(" AND UPPER(reference_code) = UPPER(:referenceCode) ");
+        if (nonEmpty(colorDial))     sb.append(" AND UPPER(color_dial) = UPPER(:colorDial) ");
+        if (productionYear != null)  sb.append(" AND production_year = :productionYear ");
+        if (nonEmpty(condition))     sb.append(" AND UPPER(watch_condition) = UPPER(:condition) ");
+        if (minPrice != null)        sb.append(" AND cost >= :minPrice ");
+        if (maxPrice != null)        sb.append(" AND cost <= :maxPrice ");
+        if (nonEmpty(currency))      sb.append(" AND UPPER(currency) = UPPER(:currency) ");
+        if (nonEmpty(watchInfo))     sb.append(" AND UPPER(watch_info) LIKE CONCAT('%', UPPER(:watchInfo), '%') ");
+
+        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sb.toString());
+        if (nonEmpty(referenceCode)) spec = spec.bind("referenceCode", referenceCode.trim());
+        if (nonEmpty(colorDial))     spec = spec.bind("colorDial", colorDial.trim());
+        if (productionYear != null)  spec = spec.bind("productionYear", productionYear);
+        if (nonEmpty(condition))     spec = spec.bind("condition", condition.trim());
+        if (minPrice != null)        spec = spec.bind("minPrice", minPrice);
+        if (maxPrice != null)        spec = spec.bind("maxPrice", maxPrice);
+        if (nonEmpty(currency))      spec = spec.bind("currency", currency.trim());
+        if (nonEmpty(watchInfo))     spec = spec.bind("watchInfo", watchInfo.trim());
+
+        return spec.map((row, meta) -> {
+            Object v = row.get("c");
+            if (v instanceof Number) return ((Number) v).longValue();
+            return Long.parseLong(String.valueOf(v));
+        }).one();
     }
 
-    private Mono<List<WatchEntity>> searchAndAggregateByWindow(WatchSearchRequest req, LocalDate globalLatest, int days) {
-        String ref = req.getReferenceCode();
+    private Mono<List<WatchEntity>> findByFiltersPaged(
+            String referenceCode, String colorDial, Integer productionYear,
+            String condition, Double minPrice, Double maxPrice,
+            String currency, String watchInfo,
+            int limit, int offset
+    ) {
+        StringBuilder sb = new StringBuilder(
+                "SELECT id, reference_code, color_dial, production_year, watch_condition, " +
+                        "       cost, created_at, currency, watch_info, as_of_date " +
+                        "FROM watches WHERE 1=1 "
+        );
+        if (nonEmpty(referenceCode)) sb.append(" AND UPPER(reference_code) = UPPER(:referenceCode) ");
+        if (nonEmpty(colorDial))     sb.append(" AND UPPER(color_dial) = UPPER(:colorDial) ");
+        if (productionYear != null)  sb.append(" AND production_year = :productionYear ");
+        if (nonEmpty(condition))     sb.append(" AND UPPER(watch_condition) = UPPER(:condition) ");
+        if (minPrice != null)        sb.append(" AND cost >= :minPrice ");
+        if (maxPrice != null)        sb.append(" AND cost <= :maxPrice ");
+        if (nonEmpty(currency))      sb.append(" AND UPPER(currency) = UPPER(:currency) ");
+        if (nonEmpty(watchInfo))     sb.append(" AND UPPER(watch_info) LIKE CONCAT('%', UPPER(:watchInfo), '%') ");
 
-        return resolveAnchorDate(ref, globalLatest)
-                .flatMap(anchor -> {
-                    if (anchor == null) return Mono.just(List.<WatchEntity>of());
-                    LocalDate from = anchor.minusDays(days - 1);
-                    LocalDate to = anchor;
+        sb.append(" ORDER BY created_at DESC, id DESC ");
+        sb.append(String.format(" LIMIT %d OFFSET %d ", limit, offset));
 
-                    return executeSearchWithRange(
-                            req.getReferenceCode(), req.getColorDial(), req.getProductionYear(),
-                            req.getCondition(), req.getMinPrice(), req.getMaxPrice(),
-                            req.getCurrency(), req.getWatchInfo(), from, to
-                    )
-                            .flatMap(this::applyMarkup)
-                            .flatMap(this::aggregateByReferenceAvgUSD);
-                });
+        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sb.toString());
+        if (nonEmpty(referenceCode)) spec = spec.bind("referenceCode", referenceCode.trim());
+        if (nonEmpty(colorDial))     spec = spec.bind("colorDial", colorDial.trim());
+        if (productionYear != null)  spec = spec.bind("productionYear", productionYear);
+        if (nonEmpty(condition))     spec = spec.bind("condition", condition.trim());
+        if (minPrice != null)        spec = spec.bind("minPrice", minPrice);
+        if (maxPrice != null)        spec = spec.bind("maxPrice", maxPrice);
+        if (nonEmpty(currency))      spec = spec.bind("currency", currency.trim());
+        if (nonEmpty(watchInfo))     spec = spec.bind("watchInfo", watchInfo.trim());
+
+        spec = spec.filter((st, next) -> { st.fetchSize(1000); return next.execute(st); });
+
+        return spec.map(this::mapRowToWatch).all().collectList();
+    }
+
+    // ---------- helpers ----------
+    private static boolean nonEmpty(String s) { return s != null && !s.trim().isEmpty(); }
+
+    private <T> PageResult<T> paginateInMemory(List<T> items, int page, int size) {
+        int total = items == null ? 0 : items.size();
+        int from  = Math.min(page * size, total);
+        int to    = Math.min(from + size, total);
+        List<T> slice = items == null ? java.util.Collections.emptyList() : items.subList(from, to);
+        return PageResult.of(slice, total, page, size);
     }
 
     private Mono<List<WatchEntity>> executeSearchWithRange(
@@ -139,8 +211,8 @@ public class WatchService {
             LocalDate from,
             LocalDate to
     ) {
-        String fromStr = (from != null) ? from.toString() : null; // yyyy-MM-dd
-        String toStr   = (to != null)   ? to.toString()   : null;
+        String fromStr = (from != null) ? from.toString() : null;
+        String toStr = (to != null) ? to.toString() : null;
 
         StringBuilder sql = new StringBuilder(
                 "SELECT id, reference_code, color_dial, production_year, watch_condition, " +
@@ -167,6 +239,9 @@ public class WatchService {
         if (maxPrice != null) {
             sql.append(" AND cost <= :maxPrice ");
         }
+        if (currency != null && !currency.isBlank()) {
+            sql.append(" AND UPPER(currency) = UPPER(:currency) ");
+        }
         if (watchInfo != null && !watchInfo.isBlank()) {
             sql.append(" AND UPPER(watch_info) LIKE CONCAT('%', UPPER(:watchInfo), '%') ");
         }
@@ -178,74 +253,15 @@ public class WatchService {
                 .bind("to", toStr);
 
         if (referenceCode != null && !referenceCode.isBlank()) spec = spec.bind("referenceCode", referenceCode.trim());
-        if (colorDial != null && !colorDial.isBlank())         spec = spec.bind("colorDial", colorDial.trim());
-        if (productionYear != null)                            spec = spec.bind("productionYear", productionYear);
-        if (condition != null && !condition.isBlank())         spec = spec.bind("condition", condition.trim());
-        if (minPrice != null)                                  spec = spec.bind("minPrice", minPrice);
-        if (maxPrice != null)                                  spec = spec.bind("maxPrice", maxPrice);
-        if (watchInfo != null && !watchInfo.isBlank())         spec = spec.bind("watchInfo", watchInfo.trim());
+        if (colorDial != null && !colorDial.isBlank()) spec = spec.bind("colorDial", colorDial.trim());
+        if (productionYear != null) spec = spec.bind("productionYear", productionYear);
+        if (condition != null && !condition.isBlank()) spec = spec.bind("condition", condition.trim());
+        if (minPrice != null) spec = spec.bind("minPrice", minPrice);
+        if (maxPrice != null) spec = spec.bind("maxPrice", maxPrice);
+        if (currency != null && !currency.isBlank()) spec = spec.bind("currency", currency.trim());
+        if (watchInfo != null && !watchInfo.isBlank()) spec = spec.bind("watchInfo", watchInfo.trim());
 
         return spec.map(this::mapRowToWatch).all().collectList();
-    }
-
-    public Mono<PageResult<WatchEntity>> getWatchByReference(String reference, int page, int size) {
-        int safeSize = Math.max(1, Math.min(size, 200)); // cap defensivo
-        int safePage = Math.max(0, page);
-        int offset = safePage * safeSize;
-
-        Mono<Long> totalMono = countByReference(reference);
-
-        Mono<List<WatchEntity>> itemsMono = findByReferencePaged(reference, safeSize, offset)
-                .flatMap(this::applyMarkup);
-
-        return Mono.zip(totalMono, itemsMono)
-                .map(tuple -> PageResult.of(tuple.getT2(), tuple.getT1(), safePage, safeSize));
-    }
-
-    private Mono<Long> countByReference(String reference) {
-        String sql = "SELECT COUNT(*) AS c FROM watches WHERE reference_code = :referenceCode";
-        return databaseClient.sql(sql)
-                .bind("referenceCode", reference)
-                .map((row, meta) -> {
-                    Object v = row.get("c");
-                    if (v instanceof Number) {
-                        return ((Number) v).longValue();
-                    }
-                    return Long.parseLong(String.valueOf(v));
-                })
-                .one();
-    }
-
-    private Mono<List<WatchEntity>> findByReferencePaged(String reference, int limit, int offset) {
-        String sql = String.format(
-                "SELECT * FROM watches WHERE reference_code = :referenceCode ORDER BY id DESC LIMIT %d OFFSET %d",
-                limit, offset
-        );
-
-        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql)
-                .bind("referenceCode", reference);
-
-        spec = spec.filter((statement, next) -> {
-            statement.fetchSize(1000);
-            return next.execute(statement);
-        });
-
-        return spec.map(this::mapRowToWatch)
-                .all()
-                .collectList();
-    }
-
-
-
-    public Mono<List<WatchEntity>> getWatchByReference(String reference, String window) {
-        return getLatestAsOfDateForReference(reference)
-                .flatMap(latestForRef -> {
-                    if (latestForRef == null) return Mono.just(List.<WatchEntity>of());
-                    return executeSearchWithAsOf(
-                            reference, null, null, null, null, null, null, null, latestForRef
-                    ).flatMap(this::applyMarkup);
-                })
-                .switchIfEmpty(Mono.just(List.of()));
     }
 
     public Mono<List<WatchEntity>> getWatchesByReferences(List<String> references) {
@@ -370,61 +386,39 @@ public class WatchService {
         return databaseClient.sql("SELECT MAX(as_of_date) AS max_date FROM document_upload_log")
                 .fetch()
                 .one()
-                .flatMap(map -> {
-                    Object v = map.get("max_date");
-                    if (v instanceof LocalDate) return Mono.just((LocalDate) v);
-                    return Mono.empty();
-                });
+                .flatMap(map -> mapMaxDate(map.get("max_date")));
     }
 
-    private Mono<List<WatchEntity>> executeSearchWithAsOf(
-            String referenceCode, String colorDial, Integer year,
-            String condition, Double minPrice, Double maxPrice,
-            String currency, String watchInfo, LocalDate asOfDate
-    ) {
-        StringBuilder sql = new StringBuilder("SELECT * FROM watches WHERE reference_code = :referenceCode");
-
-        if (colorDial != null && !colorDial.trim().isEmpty()) {
-            sql.append(" AND color_dial = :colorDial");
+    private Mono<LocalDate> mapMaxDate(Object v) {
+        if (v == null) return Mono.empty();
+        if (v instanceof LocalDate) {
+            return Mono.just((LocalDate) v);
         }
-        if (year != null) {
-            sql.append(" AND production_year = :year");
+        if (v instanceof java.sql.Date) {
+            return Mono.just(((java.sql.Date) v).toLocalDate());
         }
-        if (condition != null && !condition.trim().isEmpty()) {
-            sql.append(" AND watch_condition = :condition");
+        if (v instanceof java.time.LocalDateTime) {
+            return Mono.just(((java.time.LocalDateTime) v).toLocalDate());
         }
-        if (minPrice != null) {
-            sql.append(" AND cost >= :minPrice");
+        if (v instanceof java.sql.Timestamp) {
+            return Mono.just(((java.sql.Timestamp) v).toLocalDateTime().toLocalDate());
         }
-        if (maxPrice != null) {
-            sql.append(" AND cost <= :maxPrice");
+        if (v instanceof String) {
+            String s = (String) v;
+            try {
+                if (s.length() >= 10) s = s.substring(0, 10);
+                return Mono.just(LocalDate.parse(s));
+            } catch (Exception ignore) {
+                return Mono.empty();
+            }
         }
-        if (currency != null && !currency.trim().isEmpty()) {
-            sql.append(" AND currency = :currency");
+        try {
+            String s = v.toString();
+            if (s.length() >= 10) s = s.substring(0, 10);
+            return Mono.just(LocalDate.parse(s));
+        } catch (Exception ignore) {
+            return Mono.empty();
         }
-        if (watchInfo != null && !watchInfo.trim().isEmpty()) {
-            sql.append(" AND watch_info LIKE :watchInfo");
-        }
-
-        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql.toString())
-                .bind("referenceCode", referenceCode);
-
-        if (colorDial != null && !colorDial.trim().isEmpty()) spec = spec.bind("colorDial", colorDial);
-        if (year != null) spec = spec.bind("year", year);
-        if (condition != null && !condition.trim().isEmpty()) spec = spec.bind("condition", condition);
-        if (minPrice != null) spec = spec.bind("minPrice", minPrice);
-        if (maxPrice != null) spec = spec.bind("maxPrice", maxPrice);
-        if (currency != null && !currency.trim().isEmpty()) spec = spec.bind("currency", currency.trim().toUpperCase());
-        if (watchInfo != null && !watchInfo.trim().isEmpty()) spec = spec.bind("watchInfo", "%" + watchInfo + "%");
-
-        spec = spec.filter((statement, next) -> {
-            statement.fetchSize(1000);
-            return next.execute(statement);
-        });
-
-        return spec.map(this::mapRowToWatch)
-                .all()
-                .collectList();
     }
 
     private WatchEntity mapRowToWatch(Row row) {

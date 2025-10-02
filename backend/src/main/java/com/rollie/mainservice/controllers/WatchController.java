@@ -25,32 +25,34 @@ public class WatchController {
     private final WatchService watchService;
     private final SearchService searchService;
 
-    @GetMapping("/{reference}/window/{window}")
-    public Mono<ResponseEntity<ResponseBody<List<WatchEntity>>>> getWatchByReference(
-            @PathVariable String reference,
-            @RequestParam Long userId,
-            @PathVariable(required = false) String window
-    ) {
-        return searchService.validateSearchLimit(userId)
-                .then(watchService.getWatchByReference(reference, window))
-                .flatMap(results -> Mono.defer(() ->
-                        searchService.logSearch(userId, reference)
-                                .thenReturn(ControllerUtils.ok(results))
-                ));
-    }
-
     @GetMapping("/{reference}")
-    public Mono<ResponseEntity<ResponseBody<PageResult<WatchEntity>>>> getWatchByReference(
+    public Mono<ResponseEntity<ResponseBody<PageResult<WatchEntity>>>> getAllByReference(
             @PathVariable String reference,
             @RequestParam Long userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         return searchService.validateSearchLimit(userId)
-                .then(watchService.getWatchByReference(reference, page, size))
-                .flatMap(pageResult -> Mono.defer(() ->
+                .then(watchService.findAllByReference(reference, page, size))
+                .flatMap(result -> Mono.defer(() ->
                         searchService.logSearch(userId, reference)
-                                .thenReturn(ControllerUtils.ok(pageResult))
+                                .thenReturn(ControllerUtils.ok(result))
+                ));
+    }
+
+    @PostMapping("/search")
+    public Mono<ResponseEntity<ResponseBody<PageResult<WatchEntity>>>> searchOrSummary(
+            @RequestBody WatchSearchRequest request,
+            @RequestParam(name = "window", required = false) String window,
+            @RequestParam(name = "window") Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return searchService.validateSearchLimit(userId)
+                .then(watchService.searchOrSummary(request, window, page, size))
+                .flatMap(result -> Mono.defer(() ->
+                        searchService.logSearch(userId, request.getReferenceCode())
+                                .thenReturn(ControllerUtils.ok(result))
                 ));
     }
 
@@ -92,5 +94,4 @@ public class WatchController {
         return watchService.getWatchSummaryByReference(reference)
                 .map(ControllerUtils::ok);
     }
-
 }

@@ -44,6 +44,20 @@ const DEFAULT_FILTERS = {
 
 export default function Search() {
   const { user, tiers } = useAuth();
+  const DEFAULT_PAGE = 0;
+  const DEFAULT_SIZE = 20;
+  const [page, setPage] = useState(DEFAULT_PAGE);
+  const [size, setSize] = useState(DEFAULT_SIZE);
+
+  const [pageResult, setPageResult] = useState({
+    items: [],
+    total: 0,
+    page: DEFAULT_PAGE,
+    size: DEFAULT_SIZE,
+    pages: 1,
+    hasNext: false,
+    hasPrev: false,
+  });
 
   // ---- deep links ----
   const [filters, setFilters] = usePersistentSearchParams(DEFAULT_FILTERS);
@@ -71,6 +85,20 @@ export default function Search() {
       setAutocompleteEnabled(Boolean(userTier.autocompleteReference));
     }
   }, [userTier]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [
+    filters.reference,
+    filters.color,
+    filters.year,
+    filters.condition,
+    filters.priceMin,
+    filters.priceMax,
+    filters.currency,
+    filters.extraInfo,
+    showAdvanced,
+  ]);
 
   const [referenceSuggestions, setReferenceSuggestions] = useState([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -130,22 +158,29 @@ export default function Search() {
   }, [showAdvanced]);
 
   // Ejecuta la búsqueda; window se toma de Advanced solo si Advanced está activo
-  const runSearch = async (activeFilters) => {
+  const runSearch = async (activeFilters, p = page, s = size) => {
     const ref = activeFilters.reference?.trim();
 
-    // Si Advanced está visible y habilitado, respetamos el window del Advanced; si no, forzamos "today"
     const win =
       showAdvancedEnabled && showAdvanced
         ? (activeFilters.window || "today").toLowerCase()
         : "today";
 
-    // BÁSICO (GET): por referencia
     if (!showAdvancedEnabled || !showAdvanced) {
-      if (!ref) return [];
-      return await getWatchByReference(ref, user.userId, win); // GET /watches/{ref}/window/{win}
+      if (!ref) {
+        return {
+          items: [],
+          total: 0,
+          page: p,
+          size: s,
+          pages: 1,
+          hasNext: false,
+          hasPrev: false,
+        };
+      }
+      return await getWatchByReference(ref, user.userId, p, s);
     }
 
-    // AVANZADO (POST): filtros + window como query param
     const payload = {
       referenceCode: ref || null,
       colorDial: activeFilters.color || null,
@@ -159,9 +194,8 @@ export default function Search() {
         : null,
       currency: activeFilters.currency || null,
       watchInfo: activeFilters.extraInfo || null,
-      // window NO va en el body
     };
-    return await searchWatches(payload, user.userId, win); // POST ?window=win
+    return await searchWatches(payload, user.userId, win, p, s);
   };
 
   const handleSearch = async (e) => {
@@ -170,7 +204,9 @@ export default function Search() {
 
     try {
       setLoading(true);
-      const fetchedResults = await runSearch(filters);
+      // siempre arranca en page 0 cuando dispara manual
+      const fetched = await runSearch(filters, 0, size);
+      setPage(0);
 
       setLimitExceeded(false);
       if (searchHistoryLimit > 0) {
@@ -180,7 +216,7 @@ export default function Search() {
         setHistoryRefreshToggle((prev) => !prev);
       }
 
-      setResults(fetchedResults);
+      setPageResult(fetched);
       setShowModal(true);
     } catch (err) {
       console.error("Search error:", err);
@@ -191,7 +227,15 @@ export default function Search() {
         return;
       }
       setLimitExceeded(false);
-      setResults([]);
+      setPageResult({
+        items: [],
+        total: 0,
+        page,
+        size,
+        pages: 1,
+        hasNext: false,
+        hasPrev: false,
+      });
       setShowModal(true);
     } finally {
       setLoading(false);
@@ -199,11 +243,10 @@ export default function Search() {
   };
 
   const handleRepeatSearch = async (prevFilters) => {
-    setFilters(prevFilters); // también actualizará la URL
+    setFilters(prevFilters);
     try {
       setLoading(true);
 
-      // OJO: window ya no decide si es avanzado
       const isAdvanced =
         showAdvancedEnabled &&
         (prevFilters.color?.length ||
@@ -216,13 +259,15 @@ export default function Search() {
 
       setShowAdvanced(Boolean(isAdvanced));
 
-      const fetchedResults = await runSearch({
-        ...prevFilters,
-        adv: undefined, // limpiar flag interno
-      });
+      const fetched = await runSearch(
+        { ...prevFilters, adv: undefined },
+        0,
+        size
+      );
+      setPage(0);
 
       setLimitExceeded(false);
-      setResults(fetchedResults);
+      setPageResult(fetched);
       setShowModal(true);
     } catch (err) {
       console.error("Search error:", err);
@@ -233,8 +278,39 @@ export default function Search() {
         return;
       }
       setLimitExceeded(false);
-      setResults([]);
+      setPageResult({
+        items: [],
+        total: 0,
+        page,
+        size,
+        pages: 1,
+        hasNext: false,
+        hasPrev: false,
+      });
       setShowModal(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChangePage = async (nextPage) => {
+    try {
+      setLoading(true);
+      const fetched = await runSearch(filters, nextPage, size);
+      setPage(nextPage);
+      setPageResult(fetched);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChangeSize = async (nextSize) => {
+    try {
+      setLoading(true);
+      const fetched = await runSearch(filters, 0, nextSize);
+      setSize(nextSize);
+      setPage(0);
+      setPageResult(fetched);
     } finally {
       setLoading(false);
     }
@@ -330,8 +406,10 @@ export default function Search() {
       <SearchResultsModal
         show={showModal && !limitExceeded}
         onHide={() => setShowModal(false)}
-        results={results}
+        pageResult={pageResult} // <-- ahora PageResult completo
         loading={loading}
+        onChangePage={handleChangePage} // <-- callbacks de paginación
+        onChangeSize={handleChangeSize}
       />
 
       <CompareButton />

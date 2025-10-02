@@ -8,14 +8,14 @@ const normalizeWindow = (win) => {
 };
 
 // === 1) GET: por referencia con window como path ===
-export const getWatchByReference = async (reference, userId, window = "today") => {
+export const getWatchByReference = async (reference, userId, page = 0, size = 20) => {
   const ref = encodeURIComponent(reference?.trim?.() || "");
-  const win = normalizeWindow(window);
   try {
-    const res = await api.get(`/watches/${ref}/window/${win}`, {
-      params: { userId },
+    const res = await api.get(`/watches/${ref}`, {
+      params: { userId, page, size },
     });
-    return res.data?.result || [];
+    // Ahora el backend devuelve PageResult
+    return res.data?.result || { items: [], total: 0, page, size, pages: 1, hasNext: false, hasPrev: false };
   } catch (err) {
     console.error("Error getting watch by reference:", err);
     throw err?.response ?? err;
@@ -23,14 +23,14 @@ export const getWatchByReference = async (reference, userId, window = "today") =
 };
 
 // === 2) POST: búsqueda avanzada, window como query param (NO en body) ===
-export const searchWatches = async (payload, userId, window = "today") => {
+export const searchWatches = async (payload, userId, window = "today", page = 0, size = 20) => {
   try {
     const win = normalizeWindow(window);
     const { window: _ignoreWindow, ...body } = payload || {};
     const res = await api.post(`/watches/search`, body, {
-      params: { userId, window: win },
+      params: { userId, window: win, page, size },
     });
-    return res.data?.result || [];
+    return res.data?.result || { items: [], total: 0, page, size, pages: 1, hasNext: false, hasPrev: false };
   } catch (err) {
     console.error("Error searching watches:", err);
     throw err?.response ?? err;
