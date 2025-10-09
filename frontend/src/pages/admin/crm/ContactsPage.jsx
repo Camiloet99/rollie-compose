@@ -1,188 +1,205 @@
 import { useMemo, useState } from "react";
+import {
+  Badge,
+  Button,
+  ButtonGroup,
+  Card,
+  Col,
+  Form,
+  InputGroup,
+  Row,
+  Table,
+} from "react-bootstrap";
 import { useCrm } from "./CrmProvider";
+import ContactModal from "./modals/ContactModal";
 
 export default function ContactsPage() {
   const { state } = useCrm();
-  const [type, setType] = useState("all");
   const [view, setView] = useState("grid");
+  const [type, setType] = useState("all");
   const [q, setQ] = useState("");
+  const [showContact, setShowContact] = useState(false);
 
-  const filtered = useMemo(() => {
-    return state.contacts.filter((c) => {
-      const byType = type === "all" ? true : c.type === type;
-      const haystack =
-        `${c.firstName} ${c.lastName} ${c.email} ${c.phone} ${c.city} ${c.state}`.toLowerCase();
-      const byQuery = haystack.includes(q.toLowerCase());
-      return byType && byQuery;
-    });
-  }, [state.contacts, type, q]);
+  const filtered = useMemo(
+    () =>
+      state.contacts.filter((c) => {
+        const byType = type === "all" ? true : c.type === type;
+        const hay =
+          `${c.firstName} ${c.lastName} ${c.email} ${c.phone} ${c.city} ${c.state}`.toLowerCase();
+        return byType && hay.includes(q.toLowerCase());
+      }),
+    [state.contacts, type, q]
+  );
+
+  const typeBadge = (t) =>
+    t === "buyer" ? (
+      <Badge bg="success">buyer</Badge>
+    ) : t === "seller" ? (
+      <Badge bg="danger">seller</Badge>
+    ) : (
+      <Badge bg="primary">dealer</Badge>
+    );
 
   return (
     <>
-      <div className="contacts-header">
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <h2 className="contacts-title">Contacts</h2>
-          <span className="contacts-count">{filtered.length} Total</span>
-        </div>
-        <div className="view-toggle">
-          <button
-            className={`view-btn ${view === "grid" ? "active" : ""}`}
-            onClick={() => setView("grid")}
-          >
-            □□ Grid
-          </button>
-          <button
-            className={`view-btn ${view === "list" ? "active" : ""}`}
-            onClick={() => setView("list")}
-          >
-            ☰ List
-          </button>
-        </div>
-      </div>
-
-      <div className="action-bar">
-        <div className="action-group">
-          <button
-            className="btn btn-primary"
-            onClick={() => alert("New contact modal")}
-          >
-            ➕ Add Contact
-          </button>
-          <select
-            className="filter-select"
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-          >
-            <option value="all">All Types</option>
-            <option value="buyer">Buyers</option>
-            <option value="seller">Sellers</option>
-            <option value="dealer">Dealers</option>
-          </select>
-        </div>
-        <div className="search-box">
-          <span className="search-icon">🔍</span>
-          <input
-            className="search-input"
-            placeholder="Search contacts..."
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </div>
-      </div>
+      <Row className="align-items-center mb-3">
+        <Col xs="auto">
+          <h4 className="mb-0 fw-bold">Contacts</h4>
+        </Col>
+        <Col xs="auto">
+          <Badge bg="dark">{filtered.length} Total</Badge>
+        </Col>
+        <Col className="ms-auto" md={6}>
+          <InputGroup>
+            <InputGroup.Text>🔍</InputGroup.Text>
+            <Form.Control
+              placeholder="Search contacts..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            <Form.Select
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              style={{ maxWidth: 160 }}
+            >
+              <option value="all">All Types</option>
+              <option value="buyer">Buyers</option>
+              <option value="seller">Sellers</option>
+              <option value="dealer">Dealers</option>
+            </Form.Select>
+            <Button onClick={() => setShowContact(true)}>+ Add</Button>
+          </InputGroup>
+        </Col>
+        <Col xs="auto">
+          <ButtonGroup>
+            <Button
+              variant={view === "grid" ? "dark" : "outline-dark"}
+              onClick={() => setView("grid")}
+            >
+              Grid
+            </Button>
+            <Button
+              variant={view === "list" ? "dark" : "outline-dark"}
+              onClick={() => setView("list")}
+            >
+              List
+            </Button>
+          </ButtonGroup>
+        </Col>
+      </Row>
 
       {view === "grid" ? (
-        <div className="contacts-grid">
+        <Row xs={1} md={2} lg={3} className="g-3">
           {filtered.map((c) => (
-            <div
-              key={c.id}
-              className="contact-card"
-              onClick={() => alert("Contact detail")}
-            >
-              <div className="contact-header">
-                <div className="contact-info">
-                  <div className="contact-name">
-                    {c.firstName} {c.lastName}
+            <Col key={c.id}>
+              <Card
+                className="shadow-sm h-100"
+                role="button"
+                onClick={() => alert("Contact detail")}
+              >
+                <Card.Body>
+                  <div className="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                      <div className="fw-semibold">
+                        {c.firstName} {c.lastName}
+                      </div>
+                      <small className="text-muted">
+                        {c.city}, {c.state}
+                      </small>
+                    </div>
+                    {typeBadge(c.type)}
                   </div>
-                  <div className="contact-company">
-                    {c.city}, {c.state}
+                  <Row xs={2} className="g-2 my-2">
+                    <Col>
+                      <div className="h6 mb-0">
+                        ${(c.totalPurchases || 0).toLocaleString()}
+                      </div>
+                      <small className="text-muted">Total Purchases</small>
+                    </Col>
+                    <Col>
+                      <div className="h6 mb-0">{c.transactions || 0}</div>
+                      <small className="text-muted">Transactions</small>
+                    </Col>
+                  </Row>
+                  <div className="small text-muted">
+                    📧 {c.email}
+                    <br />
+                    📱 {c.phone}
+                    <br />
+                    📍 {c.address}
                   </div>
-                </div>
-                <span className={`contact-type ${c.type}`}>{c.type}</span>
-              </div>
-              <div className="contact-stats">
-                <div className="contact-stat">
-                  <div className="contact-stat-value">
-                    ${(c.totalPurchases || 0).toLocaleString()}
-                  </div>
-                  <div className="contact-stat-label">
-                    Total Retail Purchases
-                  </div>
-                </div>
-                <div className="contact-stat">
-                  <div className="contact-stat-value">
-                    {c.transactions || 0}
-                  </div>
-                  <div className="contact-stat-label">Transactions</div>
-                </div>
-              </div>
-              <div className="contact-details">
-                <div className="contact-detail">📧 {c.email}</div>
-                <div className="contact-detail">📱 {c.phone}</div>
-                <div className="contact-detail">📍 {c.address}</div>
-                <div className="contact-detail">
-                  🎂{" "}
-                  {c.dob
-                    ? new Date(c.dob).toLocaleDateString()
-                    : "Not provided"}
-                </div>
-              </div>
-            </div>
+                </Card.Body>
+              </Card>
+            </Col>
           ))}
           {filtered.length === 0 && (
-            <div style={{ color: "var(--gray-500)" }}>No contacts</div>
+            <Col>
+              <Card body className="text-center text-muted">
+                No contacts
+              </Card>
+            </Col>
           )}
-        </div>
+        </Row>
       ) : (
-        <div className="contacts-list active">
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>Phone</th>
-                  <th>Email</th>
-                  <th>Address</th>
-                  <th>Total Purchases</th>
-                  <th>Last Transaction</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((c) => (
-                  <tr key={c.id}>
-                    <td>
-                      {c.firstName} {c.lastName}
-                    </td>
-                    <td>
-                      <span className={`contact-type ${c.type}`}>{c.type}</span>
-                    </td>
-                    <td>{c.phone}</td>
-                    <td>{c.email}</td>
-                    <td>
-                      {c.address}, {c.city}, {c.state} {c.zip}
-                    </td>
-                    <td>${(c.totalPurchases || 0).toLocaleString()}</td>
-                    <td>
-                      {c.lastTransaction
-                        ? new Date(c.lastTransaction).toLocaleDateString()
-                        : "Never"}
-                    </td>
-                    <td>
-                      <button
-                        className="btn btn-sm btn-secondary"
-                        onClick={() => alert("Contact detail")}
-                      >
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && (
+        <Card className="shadow-sm">
+          <Card.Body className="p-0">
+            <div className="table-responsive">
+              <Table hover bordered className="mb-0 align-middle">
+                <thead className="table-light">
                   <tr>
-                    <td
-                      colSpan={8}
-                      style={{ padding: 16, color: "var(--gray-500)" }}
-                    >
-                      No results
-                    </td>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Phone</th>
+                    <th>Email</th>
+                    <th>Address</th>
+                    <th>Total Purchases</th>
+                    <th>Last Transaction</th>
+                    <th style={{ width: 110 }}>Actions</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                </thead>
+                <tbody>
+                  {filtered.map((c) => (
+                    <tr key={c.id}>
+                      <td>
+                        {c.firstName} {c.lastName}
+                      </td>
+                      <td>{typeBadge(c.type)}</td>
+                      <td>{c.phone}</td>
+                      <td>{c.email}</td>
+                      <td>
+                        {c.address}, {c.city}, {c.state} {c.zip}
+                      </td>
+                      <td>${(c.totalPurchases || 0).toLocaleString()}</td>
+                      <td>
+                        {c.lastTransaction
+                          ? new Date(c.lastTransaction).toLocaleDateString()
+                          : "Never"}
+                      </td>
+                      <td>
+                        <Button
+                          size="sm"
+                          variant="outline-secondary"
+                          onClick={() => alert("Contact detail")}
+                        >
+                          View
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {filtered.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="text-center text-muted py-4">
+                        No results
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </Table>
+            </div>
+          </Card.Body>
+        </Card>
       )}
+      <ContactModal show={showContact} onHide={() => setShowContact(false)} />
     </>
   );
 }

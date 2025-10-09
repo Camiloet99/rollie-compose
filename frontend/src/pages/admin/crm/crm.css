@@ -1,7 +1,21 @@
+
+
 .crm-root {
-    font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
-    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
     min-height: 100vh;
+    background: #f8fafc;
 }
 
-/* luego todos los bloques como .header, .main-nav, .stat-card, etc. sin tocar tokens */
+.crm-logo {
+    width: 40px;
+    height: 40px;
+    border-radius: .75rem;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    font-size: 1.25rem;
+}
+
+.crm-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}

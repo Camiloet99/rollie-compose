@@ -1,11 +1,17 @@
-import { useMemo, useState } from "react";
+import {
+  Row,
+  Col,
+  Card,
+  Button,
+  Form,
+  Badge,
+  Table,
+  Stack,
+  ButtonGroup,
+} from "react-bootstrap";
+import { useState, useMemo } from "react";
 import { useCrm } from "./CrmProvider";
-import DealModal from "./DealModal";
-import { Badge, Button } from "react-bootstrap";
-
-function stageClass(stage) {
-  return stage === "closed-won" ? "status-available" : "status-pending";
-}
+import DealModal from "./modals/DealModal";
 
 export default function SalesDashboard() {
   const { state, selectors, actions } = useCrm();
@@ -22,218 +28,246 @@ export default function SalesDashboard() {
   );
   const deals = selectors.getDealsList(state.currentStageFilter);
 
+  const stageBadge = (stage) =>
+    stage === "closed-won" ? (
+      <Badge bg="success">Closed Won</Badge>
+    ) : (
+      <Badge bg="warning" text="dark">
+        {stage.replace("-", " ")}
+      </Badge>
+    );
+
   return (
     <>
-      <div className="dashboard-header">
-        <h2 className="dashboard-title">Sales Pipeline</h2>
-        <div className="date-filter">
-          <select className="filter-select" defaultValue="This Month">
+      {/* Header acciones */}
+      <Stack direction="horizontal" className="mb-3" gap={3}>
+        <h4 className="mb-0 fw-bold">Sales Pipeline</h4>
+        <div className="ms-auto d-flex align-items-center gap-2">
+          <Form.Select size="sm" defaultValue="This Month" className="w-auto">
             <option>This Month</option>
             <option>Last Month</option>
             <option>This Quarter</option>
             <option>This Year</option>
             <option>All Time</option>
-          </select>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => setShowDeal(true)}
-          >
+          </Form.Select>
+          <Button size="sm" onClick={() => setShowDeal(true)}>
             + New Deal
-          </button>
+          </Button>
         </div>
-      </div>
+      </Stack>
 
-      {/* Stats */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-header">
-            <span className="stat-label">Total Pipeline Value</span>
-            <div className="stat-icon">💎</div>
-          </div>
-          <div className="stat-value">${totalPipeline.toLocaleString()}</div>
-          <div className="stat-change positive">
-            <span>{state.deals.length} active deals</span>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-header">
-            <span className="stat-label">Closed This Month</span>
-            <div className="stat-icon">✅</div>
-          </div>
-          <div className="stat-value">
-            ${pipeline["closed-won"].value.toLocaleString()}
-          </div>
-          <div className="stat-change positive">
-            <span>{pipeline["closed-won"].count} deals closed</span>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-header">
-            <span className="stat-label">Average Deal Size</span>
-            <div className="stat-icon">📊</div>
-          </div>
-          <div className="stat-value">
-            $
-            {state.deals.length
-              ? Math.round(totalPipeline / state.deals.length).toLocaleString()
-              : 0}
-          </div>
-          <div className="stat-change">
-            <span>Based on active deals</span>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-header">
-            <span className="stat-label">Win Rate</span>
-            <div className="stat-icon">🎯</div>
-          </div>
-          <div className="stat-value">
-            {(() => {
-              const closed = pipeline["closed-won"].count;
-              const denom = state.deals.length + closed;
-              return denom ? Math.round((closed / denom) * 100) : 0;
-            })()}
-            %
-          </div>
-          <div className="stat-change positive">
-            <span>Last 30 days</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Pipeline Stages */}
-      <div className="pipeline-container">
-        <div className="pipeline-header">
-          <h3 style={{ fontSize: 18, fontWeight: 600 }}>Pipeline Stages</h3>
-          <span style={{ fontSize: 13, color: "var(--gray-500)" }}>
-            Click stage to filter deals
-          </span>
-        </div>
-
-        <div className="pipeline-stages">
-          {[
-            "prospect",
-            "qualified",
-            "negotiation",
-            "closing",
-            "closed-won",
-          ].map((stage) => (
-            <div
-              key={stage}
-              className={`stage-card ${
-                stage === "closed-won" ? "closed-won" : ""
-              } ${state.currentStageFilter === stage ? "active" : ""}`}
-              onClick={() => actions.setStageFilter(stage)}
-            >
-              <div className="stage-header">
-                <span className="stage-name">
-                  {stage
-                    .replace("-", " ")
-                    .replace(/\b\w/g, (c) => c.toUpperCase())}
-                </span>
-                <span className="stage-count">{pipeline[stage].count}</span>
+      {/* KPI Cards */}
+      <Row xs={1} md={2} lg={4} className="g-3 mb-3">
+        <Col>
+          <Card className="shadow-sm h-100">
+            <Card.Body>
+              <div className="text-muted small">Total Pipeline Value</div>
+              <div className="display-6 fw-bold">
+                ${totalPipeline.toLocaleString()}
               </div>
-              <div className="stage-value">
-                ${pipeline[stage].value.toLocaleString()}
+              <div className="text-success small">
+                {state.deals.length} active deals
               </div>
-              <div className="stage-deals">{pipeline[stage].count} deals</div>
-            </div>
-          ))}
-        </div>
-      </div>
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col>
+          <Card className="shadow-sm h-100">
+            <Card.Body>
+              <div className="text-muted small">Closed This Month</div>
+              <div className="display-6 fw-bold">
+                ${pipeline["closed-won"].value.toLocaleString()}
+              </div>
+              <div className="text-success small">
+                {pipeline["closed-won"].count} deals closed
+              </div>
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col>
+          <Card className="shadow-sm h-100">
+            <Card.Body>
+              <div className="text-muted small">Average Deal Size</div>
+              <div className="display-6 fw-bold">
+                $
+                {state.deals.length
+                  ? Math.round(
+                      totalPipeline / state.deals.length
+                    ).toLocaleString()
+                  : 0}
+              </div>
+              <div className="text-muted small">Based on active deals</div>
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col>
+          <Card className="shadow-sm h-100">
+            <Card.Body>
+              <div className="text-muted small">Win Rate</div>
+              <div className="display-6 fw-bold">
+                {(() => {
+                  const c = pipeline["closed-won"].count;
+                  const d = state.deals.length + c;
+                  return d ? Math.round((c / d) * 100) : 0;
+                })()}
+                %
+              </div>
+              <div className="text-success small">Last 30 days</div>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
 
-      {/* Deals Table */}
-      <div className="table-container">
-        <div className="table-header">
-          <span className="table-title">
+      {/* Pipeline stages */}
+      <Card className="shadow-sm mb-3">
+        <Card.Header className="bg-white">
+          <div className="d-flex justify-content-between align-items-center">
+            <strong>Pipeline Stages</strong>
+            <small className="text-muted">Click stage to filter deals</small>
+          </div>
+        </Card.Header>
+        <Card.Body>
+          <Row xs={1} md={5} className="g-3">
+            {[
+              "prospect",
+              "qualified",
+              "negotiation",
+              "closing",
+              "closed-won",
+            ].map((s) => (
+              <Col key={s}>
+                <Card
+                  className={`h-100 border-2 ${
+                    state.currentStageFilter === s
+                      ? "border-primary"
+                      : "border-light"
+                  } ${s === "closed-won" ? "bg-light" : ""}`}
+                  role="button"
+                  onClick={() => actions.setStageFilter(s)}
+                >
+                  <Card.Body>
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <div className="text-uppercase small fw-semibold text-muted">
+                        {s.replace("-", " ")}
+                      </div>
+                      <Badge bg={s === "closed-won" ? "success" : "primary"}>
+                        {pipeline[s].count}
+                      </Badge>
+                    </div>
+                    <div className="h5 mb-1">
+                      ${pipeline[s].value.toLocaleString()}
+                    </div>
+                    <div className="text-muted small">
+                      {pipeline[s].count} deals
+                    </div>
+                  </Card.Body>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        </Card.Body>
+      </Card>
+
+      {/* Tabla de deals */}
+      <Card className="shadow-sm">
+        <Card.Header className="bg-white d-flex align-items-center">
+          <strong className="me-auto">
             {state.currentStageFilter
               ? `${state.currentStageFilter} Deals`
               : "All Deals"}
-          </span>
-          <div className="table-actions">
-            <button
-              className="btn btn-secondary btn-sm"
+          </strong>
+          <ButtonGroup size="sm">
+            <Button
+              variant="outline-secondary"
               onClick={() => actions.setStageFilter(null)}
             >
               Clear Filter
-            </button>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => alert("Export sales data to CSV")}
+            </Button>
+            <Button
+              variant="outline-secondary"
+              onClick={() => alert("Export CSV")}
             >
               Export
-            </button>
-          </div>
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Stage</th>
-              <th>Watch</th>
-              <th>Reference</th>
-              <th>Contact</th>
-              <th>Cost</th>
-              <th>Proposed Price</th>
-              <th>Expected Profit</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {deals.map((deal) => {
-              const watch = state.inventory.find((w) => w.id === deal.watchId);
-              const contact = state.contacts.find(
-                (c) => c.id === deal.contactId
-              );
-              if (!watch) return null;
-              const price = deal.proposedPrice || deal.salePrice || 0;
-              const profit = price - (watch.cost || 0);
-              return (
-                <tr key={deal.id}>
-                  <td>
-                    {new Date(
-                      deal.createdDate || deal.saleDate
-                    ).toLocaleDateString()}
-                  </td>
-                  <td>
-                    <span className={`status-badge ${stageClass(deal.stage)}`}>
-                      {deal.stage.replace("-", " ")}
-                    </span>
-                  </td>
-                  <td>
-                    {watch.brand} {watch.model}
-                  </td>
-                  <td>{watch.reference}</td>
-                  <td>
-                    {contact
-                      ? `${contact.firstName} ${contact.lastName}`
-                      : "Unknown"}
-                  </td>
-                  <td>${watch.cost.toLocaleString()}</td>
-                  <td>${price.toLocaleString()}</td>
-                  <td
-                    style={{
-                      color: profit >= 0 ? "var(--success)" : "var(--danger)",
-                    }}
-                  >
-                    ${profit.toLocaleString()}
-                  </td>
-                  <td>
-                    <button
-                      className="btn btn-sm btn-secondary"
-                      onClick={() => alert("Deal detail modal")}
-                    >
-                      View
-                    </button>
-                  </td>
+            </Button>
+          </ButtonGroup>
+        </Card.Header>
+        <Card.Body className="p-0">
+          <div className="table-responsive">
+            <Table hover bordered className="mb-0 align-middle">
+              <thead className="table-light">
+                <tr>
+                  <th>Date</th>
+                  <th>Stage</th>
+                  <th>Watch</th>
+                  <th>Reference</th>
+                  <th>Contact</th>
+                  <th>Cost</th>
+                  <th>Proposed Price</th>
+                  <th>Expected Profit</th>
+                  <th style={{ width: 110 }}>Actions</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {deals.map((deal) => {
+                  const watch = state.inventory.find(
+                    (w) => w.id === deal.watchId
+                  );
+                  const contact = state.contacts.find(
+                    (c) => c.id === deal.contactId
+                  );
+                  if (!watch) return null;
+                  const price = deal.proposedPrice || deal.salePrice || 0;
+                  const profit = price - (watch.cost || 0);
+                  return (
+                    <tr key={deal.id}>
+                      <td>
+                        {new Date(
+                          deal.createdDate || deal.saleDate
+                        ).toLocaleDateString()}
+                      </td>
+                      <td>{stageBadge(deal.stage)}</td>
+                      <td>
+                        {watch.brand} {watch.model}
+                      </td>
+                      <td>{watch.reference}</td>
+                      <td>
+                        {contact
+                          ? `${contact.firstName} ${contact.lastName}`
+                          : "Unknown"}
+                      </td>
+                      <td>${watch.cost.toLocaleString()}</td>
+                      <td>${price.toLocaleString()}</td>
+                      <td
+                        className={profit >= 0 ? "text-success" : "text-danger"}
+                      >
+                        ${profit.toLocaleString()}
+                      </td>
+                      <td>
+                        <Button
+                          size="sm"
+                          variant="outline-secondary"
+                          onClick={() => alert("Deal detail")}
+                        >
+                          View
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {deals.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="text-center text-muted py-4">
+                      No deals
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </Table>
+          </div>
+        </Card.Body>
+      </Card>
 
-      {showDeal && <DealModal onClose={() => setShowDeal(false)} />}
+      <DealModal show={showDeal} onHide={() => setShowDeal(false)} />
     </>
   );
 }
