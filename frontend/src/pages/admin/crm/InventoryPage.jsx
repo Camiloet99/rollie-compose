@@ -13,15 +13,16 @@ import { useMemo, useState } from "react";
 import { useCrm } from "./CrmProvider";
 import WatchEditModal from "./WatchEditModal";
 import WatchAddModal from "./WatchAddModal";
+import InventoryImportModal from "./modals/InventoryImportModal";
 
 export default function InventoryPage() {
   const { state } = useCrm();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
-  const [watchModalOpen, setWatchModalOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [selectedWatchId, setSelectedWatchId] = useState(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const filtered = useMemo(
     () =>
@@ -53,7 +54,7 @@ export default function InventoryPage() {
             <Button onClick={() => setAddOpen(true)}>➕ Add Watch</Button>
             <Button
               variant="outline-secondary"
-              onClick={() => alert("Import CSV")}
+              onClick={() => setImportOpen(true)}
             >
               📤 Import
             </Button>
@@ -157,6 +158,10 @@ export default function InventoryPage() {
         show={editOpen}
         watchId={selectedWatchId}
         onHide={() => setEditOpen(false)}
+      />
+      <InventoryImportModal
+        show={importOpen}
+        onHide={() => setImportOpen(false)}
       />
     </>
   );
