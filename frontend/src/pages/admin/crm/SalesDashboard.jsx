@@ -12,10 +12,13 @@ import {
 import { useState, useMemo } from "react";
 import { useCrm } from "./CrmProvider";
 import DealModal from "./DealModal";
+import DealViewModal from "./modals/DealViewModal";
 
 export default function SalesDashboard() {
   const { state, selectors, actions } = useCrm();
   const [showDeal, setShowDeal] = useState(false);
+  const [dealModalOpen, setDealModalOpen] = useState(false);
+  const [selectedDealId, setSelectedDealId] = useState(null);
 
   const pipeline = selectors.getPipelineStats();
   const totalPipeline = useMemo(
@@ -246,7 +249,10 @@ export default function SalesDashboard() {
                         <Button
                           size="sm"
                           variant="outline-secondary"
-                          onClick={() => alert("Deal detail")}
+                          onClick={() => {
+                            setSelectedDealId(deal.id);
+                            setDealModalOpen(true);
+                          }}
                         >
                           View
                         </Button>
@@ -268,6 +274,11 @@ export default function SalesDashboard() {
       </Card>
 
       <DealModal show={showDeal} onHide={() => setShowDeal(false)} />
+      <DealViewModal
+        show={dealModalOpen}
+        dealId={selectedDealId}
+        onHide={() => setDealModalOpen(false)}
+      />
     </>
   );
 }

@@ -147,6 +147,22 @@ function reducer(state, action) {
       };
       return { ...state, contacts: [...state.contacts, contact] };
     }
+    case "UPDATE_WATCH": {
+      const w = action.payload; // {id, ...campos}
+      return {
+        ...state,
+        inventory: state.inventory.map((x) =>
+          x.id === w.id ? { ...x, ...w } : x
+        ),
+      };
+    }
+    case "UPDATE_DEAL": {
+      const d = action.payload; // {id, ...campos}
+      return {
+        ...state,
+        deals: state.deals.map((x) => (x.id === d.id ? { ...x, ...d } : x)),
+      };
+    }
     case "SAVE_DEAL": {
       const deal = {
         ...action.payload,
@@ -259,6 +275,8 @@ export function CrmProvider({ children }) {
   const actions = {
     saveContact: (payload) => dispatch({ type: "SAVE_CONTACT", payload }),
     saveDeal: (payload) => dispatch({ type: "SAVE_DEAL", payload }),
+    updateWatch: (payload) => dispatch({ type: "UPDATE_WATCH", payload }),
+    updateDeal: (payload) => dispatch({ type: "UPDATE_DEAL", payload }),
     setStageFilter: (stage) =>
       dispatch({ type: "SET_STAGE_FILTER", payload: stage }),
     setContactView: (view) =>
