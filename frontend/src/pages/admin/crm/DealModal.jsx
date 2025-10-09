@@ -48,7 +48,7 @@ export default function DealModal({ show, onHide }) {
   };
 
   return (
-    <Modal show={show} onHide={onHide} size="lg" centered>
+    <Modal show={show} onHide={onHide} size="lg" centered scrollable>
       <Form onSubmit={onSubmit}>
         <Modal.Header closeButton>
           <Modal.Title>Create New Deal</Modal.Title>

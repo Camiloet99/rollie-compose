@@ -137,6 +137,13 @@ function reducer(state, action) {
   switch (action.type) {
     case "LOAD_FROM_STORAGE":
       return { ...state, ...action.payload };
+    case "ADD_WATCH": {
+      const w = action.payload; // { id?, serialNumber, brand, model, reference, year, purchaseDate, cost, retailPrice, status, condition }
+      const id = w.id || `WD-${String(Date.now()).slice(-3)}`;
+      const daysInStock = w.purchaseDate ? daysBetween(w.purchaseDate) : 0;
+      const newWatch = { ...w, id, daysInStock };
+      return { ...state, inventory: [newWatch, ...state.inventory] };
+    }
     case "SAVE_CONTACT": {
       const contact = {
         ...action.payload,
@@ -272,9 +279,16 @@ export function CrmProvider({ children }) {
     return { getInventoryStats, getPipelineStats, getDealsList };
   }, [state.deals, state.inventory, state.sales]);
 
+  function daysBetween(fromISO) {
+    const d = new Date(fromISO);
+    const today = new Date();
+    return Math.floor((today - d) / (1000 * 60 * 60 * 24));
+  }
+
   const actions = {
     saveContact: (payload) => dispatch({ type: "SAVE_CONTACT", payload }),
     saveDeal: (payload) => dispatch({ type: "SAVE_DEAL", payload }),
+    addWatch: (payload) => dispatch({ type: "ADD_WATCH", payload }),
     updateWatch: (payload) => dispatch({ type: "UPDATE_WATCH", payload }),
     updateDeal: (payload) => dispatch({ type: "UPDATE_DEAL", payload }),
     setStageFilter: (stage) =>
