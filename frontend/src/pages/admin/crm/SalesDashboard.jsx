@@ -12,7 +12,7 @@ import {
 import { useState, useMemo } from "react";
 import { useCrm } from "./CrmProvider";
 import DealModal from "./DealModal";
-import DealViewModal from "./modals/DealViewModal";
+import DealViewModal from "./DealViewModal";
 
 export default function SalesDashboard() {
   const { state, selectors, actions } = useCrm();
