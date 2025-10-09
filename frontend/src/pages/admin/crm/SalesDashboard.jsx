@@ -11,7 +11,7 @@ import {
 } from "react-bootstrap";
 import { useState, useMemo } from "react";
 import { useCrm } from "./CrmProvider";
-import DealModal from "./modals/DealModal";
+import DealModal from "./DealModal";
 
 export default function SalesDashboard() {
   const { state, selectors, actions } = useCrm();
