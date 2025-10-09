@@ -11,7 +11,7 @@ import {
   Table,
 } from "react-bootstrap";
 import { useCrm } from "./CrmProvider";
-import ContactModal from "./modals/ContactModal";
+import ContactModal from "./ContactModal";
 
 export default function ContactsPage() {
   const { state } = useCrm();
