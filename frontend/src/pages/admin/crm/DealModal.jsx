@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Modal, Button, Form, Row, Col, Stack } from "react-bootstrap";
-import { useCrm } from "../CrmProvider";
+import { useCrm } from "./CrmProvider";
 
 export default function DealModal({ show, onHide }) {
   const { state, actions } = useCrm();

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Modal, Button, Form, Row, Col } from "react-bootstrap";
-import { useCrm } from "../CrmProvider";
+import { useCrm } from "./CrmProvider";
 
 export default function ContactModal({ show, onHide }) {
   const { actions } = useCrm();
