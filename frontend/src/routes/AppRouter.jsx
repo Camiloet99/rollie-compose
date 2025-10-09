@@ -23,6 +23,8 @@ import UserManagement from "../pages/admin/UserManagement";
 import { Spinner, Container } from "react-bootstrap";
 import AdminTierManagement from "../pages/AdminTierManagement";
 import ResetPassword from "../pages/ResetPassword";
+import AdminRoute from "./AdminRoute";
+import AdminCrm from "../pages/admin/crm";
 
 export default function AppRouter() {
   const { isAuthenticated, user, loading } = useAuth();
@@ -114,6 +116,14 @@ export default function AppRouter() {
                   ) : (
                     <Navigate to="/" replace />
                   )
+                }
+              />
+              <Route
+                path="/admin/crm"
+                element={
+                  <AdminRoute>
+                    <AdminCrm />
+                  </AdminRoute>
                 }
               />
               <Route

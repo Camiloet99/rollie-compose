@@ -1,0 +1,7 @@
+.crm-root {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    min-height: 100vh;
+}
+
+/* luego todos los bloques como .header, .main-nav, .stat-card, etc. sin tocar tokens */

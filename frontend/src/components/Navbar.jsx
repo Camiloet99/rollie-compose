@@ -69,6 +69,9 @@ export default function AppNavbar() {
                     <NavDropdown.Item as={Link} to="/admin/tiers">
                       Manage Tiers
                     </NavDropdown.Item>
+                    <NavDropdown.Item as={Link} to="/admin/crm">
+                      CRM
+                    </NavDropdown.Item>
                   </NavDropdown>
                 )}
 
