@@ -68,15 +68,27 @@ CREATE TABLE IF NOT EXISTS users (
 -- Tabla de relojes
 CREATE TABLE IF NOT EXISTS watches (
     id INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
-    reference_code VARCHAR(50) NOT NULL,
-    color_dial VARCHAR(50),
-    production_year SMALLINT UNSIGNED,
-    watch_condition VARCHAR(50),
-    cost DECIMAL(20,2),
+
+    fecha_archivo DATE,
+    clean_text TEXT,
+    brand VARCHAR(80),
+    modelo VARCHAR(60),
     currency VARCHAR(10),
+    monto DECIMAL(20,2),
+    descuento DECIMAL(7,2),
+    monto_final DECIMAL(20,2),
+    estado VARCHAR(12),
+    condicion VARCHAR(50),
+    anio SMALLINT UNSIGNED,
+    bracelet VARCHAR(30),
+    color VARCHAR(40),
+
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    watch_info VARCHAR(60),
-    as_of_date DATE NOT NULL
+
+    INDEX idx_watches_fecha_archivo (fecha_archivo),
+    INDEX idx_watches_modelo (modelo),
+    INDEX idx_watches_brand (brand),
+    INDEX idx_watches_monto_final (monto_final)
 );
 
 -- Tabla de favoritos

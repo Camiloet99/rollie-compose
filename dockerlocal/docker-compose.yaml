@@ -1,0 +1,83 @@
+version: "3.9"
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: db
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: 1152225289
+      MYSQL_DATABASE: rollie
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -proot || mysqladmin ping -h 127.0.0.1 -proot || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  python-service:
+    build: ../python-service
+    container_name: python-service
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # IMPORTANTE: dentro del contenedor, usar el nombre del servicio 'db' (NO localhost)
+      DATABASE_URL: mysql+pymysql://root:1152225289@db:3306/rollie?charset=utf8mb4
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf http://localhost:8000/health || wget -qO- http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    build: ../backend
+    container_name: backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Conéctate a la base local del servicio 'db'
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: rollie
+      DB_USER: root
+      DB_PASSWORD: 1152225289
+      # El backend llama al microservicio de Python por nombre de servicio (red interna)
+      PYTHON_SERVICE_URL: http://python-service:8000
+    depends_on:
+      db:
+        condition: service_healthy
+      python-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  frontend:
+    build:
+      context: ../frontend
+      args:
+        # Para el navegador del dev, la API será localhost:8080
+        REACT_APP_API_URL: http://localhost:8080
+    container_name: frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
