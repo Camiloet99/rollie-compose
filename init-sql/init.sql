@@ -83,12 +83,14 @@ CREATE TABLE IF NOT EXISTS watches (
     bracelet VARCHAR(30),
     color VARCHAR(40),
 
+    as_of_date DATE NOT NULL,                -- ← nuevo
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
     INDEX idx_watches_fecha_archivo (fecha_archivo),
     INDEX idx_watches_modelo (modelo),
     INDEX idx_watches_brand (brand),
-    INDEX idx_watches_monto_final (monto_final)
+    INDEX idx_watches_monto_final (monto_final),
+    INDEX idx_watches_as_of_date (as_of_date)
 );
 
 -- Tabla de favoritos

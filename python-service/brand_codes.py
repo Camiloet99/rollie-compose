@@ -7955,13 +7955,14 @@ raw_data = [
 ]
 
 BRAND_CODES: List[Dict[str, str]] = [
-    {"Brand": brand, "ref_code_lo": ref_code} for brand, ref_code in raw_data
+    {"Brand": brand, "ref_code_lo": (ref_code or "").lower()}
+    for brand, ref_code in raw_data
 ]
 
 def get_brand_codes_list() -> List[Dict[str, str]]:
-    """Devuelve la lista de códigos tal cual (para pasarlo directo al limpiador Spark)."""
+    """Devuelve la lista de códigos (ref_code_lo en minúscula)."""
     return BRAND_CODES
 
 def get_brand_codes_df() -> pd.DataFrame:
-    """Devuelve la data como DataFrame de Pandas (por si prefieres este formato)."""
+    """Devuelve la data como DataFrame de Pandas."""
     return pd.DataFrame(BRAND_CODES, columns=["Brand", "ref_code_lo"])

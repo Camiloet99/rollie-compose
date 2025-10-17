@@ -25,22 +25,62 @@ export default function AdvancedFilters({
           </Form.Select>
         </Form.Group>
       </Col>
-
-      {/* Color */}
+      {/* Brand */}
+      <Col md={3}>
+        <Form.Group controlId="brand">
+          <Form.Label>Brand</Form.Label>
+          <Form.Control
+            type="text"
+            name="brand"
+            value={filters.brand || ""}
+            onChange={handleChange}
+            placeholder="Rolex, Omega…"
+            disabled={loading}
+          />
+        </Form.Group>
+      </Col>
+      {/* Status (estado) */}
+      <Col md={3}>
+        <Form.Group controlId="estado">
+          <Form.Label>Status</Form.Label>
+          <Form.Control
+            type="text"
+            name="estado"
+            value={filters.estado || ""}
+            onChange={handleChange}
+            placeholder="e.g. n7, bnib, full set…"
+            disabled={loading}
+          />
+        </Form.Group>
+      </Col>
+      {/* Bracelet */}
+      <Col md={3}>
+        <Form.Group controlId="bracelet">
+          <Form.Label>Bracelet</Form.Label>
+          <Form.Control
+            type="text"
+            name="bracelet"
+            value={filters.bracelet || ""}
+            onChange={handleChange}
+            placeholder="Oyster, Jubilee…"
+            disabled={loading}
+          />
+        </Form.Group>
+      </Col>
+      {/* Color (se mapea a colorDial en el payload del request) */}
       <Col md={3}>
         <Form.Group controlId="color">
-          <Form.Label>Color</Form.Label>
+          <Form.Label>Bracelet / Color</Form.Label>
           <Form.Control
             type="text"
             name="color"
             value={filters.color || ""}
             onChange={handleChange}
-            placeholder="Dial color"
+            placeholder="Dial color (e.g. Tiffany, Blue…)"
             disabled={loading}
           />
         </Form.Group>
       </Col>
-
       {/* Condition */}
       <Col md={3}>
         <Form.Group controlId="condition">
@@ -52,30 +92,15 @@ export default function AdvancedFilters({
             disabled={loading}
           >
             <option value="">Any</option>
-            <option value="new">New</option>
-            <option value="like_new">Like New</option>
-            <option value="very_good">Very Good</option>
+            <option value="brand new">Brand New</option>
+            <option value="like new">Like New</option>
+            <option value="very good">Very Good</option>
             <option value="good">Good</option>
             <option value="fair">Fair</option>
+            <option value="used">Used</option>
           </Form.Select>
         </Form.Group>
       </Col>
-
-      {/* Material */}
-      <Col md={3}>
-        <Form.Group controlId="material">
-          <Form.Label>Material</Form.Label>
-          <Form.Control
-            type="text"
-            name="material"
-            value={filters.material || ""}
-            onChange={handleChange}
-            placeholder="Steel, Gold, Titanium…"
-            disabled={loading}
-          />
-        </Form.Group>
-      </Col>
-
       {/* Production Year */}
       <Col md={3}>
         <Form.Group controlId="year">
@@ -86,11 +111,12 @@ export default function AdvancedFilters({
             value={filters.year || ""}
             onChange={handleChange}
             placeholder="e.g. 2019"
+            min="1900"
+            max="2100"
             disabled={loading}
           />
         </Form.Group>
       </Col>
-
       {/* Min / Max Price */}
       <Col md={3}>
         <Form.Group controlId="priceMin">
@@ -106,7 +132,6 @@ export default function AdvancedFilters({
           />
         </Form.Group>
       </Col>
-
       <Col md={3}>
         <Form.Group controlId="priceMax">
           <Form.Label>Max Price</Form.Label>
@@ -121,34 +146,23 @@ export default function AdvancedFilters({
           />
         </Form.Group>
       </Col>
-
-      {/* Extra Info */}
-      <Col md={6}>
-        <Form.Group controlId="extraInfo">
-          <Form.Label>Extra Info</Form.Label>
-          <Form.Control
-            type="text"
-            name="extraInfo"
-            value={filters.extraInfo || ""}
-            onChange={handleChange}
-            placeholder="Keywords (comma separated)"
-            disabled={loading}
-          />
-        </Form.Group>
-      </Col>
-
-      {/* Brand */}
       <Col md={3}>
-        <Form.Group controlId="brand">
-          <Form.Label>Brand</Form.Label>
-          <Form.Control
-            type="text"
-            name="brand"
-            value={filters.brand || ""}
+        <Form.Group controlId="sort">
+          <Form.Label>Sort</Form.Label>
+          <Form.Select
+            name="sort"
+            value={filters.sort || ""}
             onChange={handleChange}
-            placeholder="Rolex, Omega…"
             disabled={loading}
-          />
+          >
+            <option value="">Default (Date ↓)</option>
+            <option value="date_desc">Date: new → old</option>
+            <option value="date_asc">Date: old → new</option>
+            <option value="price_desc">Price: high → low</option>
+            <option value="price_asc">Price: low → high</option>
+            <option value="year_desc">Year: new → old</option>
+            <option value="year_asc">Year: old → new</option>
+          </Form.Select>
         </Form.Group>
       </Col>
     </Row>

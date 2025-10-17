@@ -1,16 +1,10 @@
 package com.rollie.mainservice.controllers;
 
 import com.rollie.mainservice.entities.WatchEntity;
-import com.rollie.mainservice.models.PageResult;
+import com.rollie.mainservice.models.*;
 import com.rollie.mainservice.models.ResponseBody;
-import com.rollie.mainservice.models.WatchPriceHistoryResponse;
-import com.rollie.mainservice.models.WatchReferenceSummaryResponse;
-import com.rollie.mainservice.models.requests.WatchReferencesRequest;
-import com.rollie.mainservice.models.requests.WatchSearchRequest;
-import com.rollie.mainservice.services.SearchService;
-import com.rollie.mainservice.services.WatchService;
+import com.rollie.mainservice.services.WatchQueryService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -22,76 +16,85 @@ import java.util.List;
 @RequiredArgsConstructor
 public class WatchController {
 
-    private final WatchService watchService;
-    private final SearchService searchService;
+    private final WatchQueryService watchQueryService;
 
-    @GetMapping("/{reference}")
-    public Mono<ResponseEntity<ResponseBody<PageResult<WatchEntity>>>> getAllByReference(
-            @PathVariable String reference,
-            @RequestParam Long userId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+    @PostMapping("/query")
+    public Mono<ResponseEntity<ResponseBody<PageResult<WatchEntity>>>> query(
+            @RequestBody WatchFilter filter,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sort", defaultValue = "date_desc") String sort,
+            @RequestParam(name = "window", required = false) String window
     ) {
-        return searchService.validateSearchLimit(userId)
-                .then(watchService.findAllByReference(reference, page, size))
-                .flatMap(result -> Mono.defer(() ->
-                        searchService.logSearch(userId, reference)
-                                .thenReturn(ControllerUtils.ok(result))
-                ));
-    }
+        PageRequestEx req = new PageRequestEx(page, size, sort);
 
-    @PostMapping("/search")
-    public Mono<ResponseEntity<ResponseBody<PageResult<WatchEntity>>>> searchOrSummary(
-            @RequestBody WatchSearchRequest request,
-            @RequestParam(name = "userId") Long userId,
-            @RequestParam(name = "window", required = false) String window, // "", today, 7d, 15d
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
-    ) {
-        return searchService.validateSearchLimit(userId)
-                .then(watchService.searchOrSummary(request, window, page, size))
-                .flatMap(result -> Mono.defer(() ->
-                        searchService.logSearch(userId, request.getReferenceCode())
-                                .thenReturn(ControllerUtils.ok(result))
-                ));
-    }
+        if (window != null && !window.trim().isEmpty()) {
+            return watchQueryService.averageByWindow(filter, window.trim().toLowerCase(), req)
+                    .map(ControllerUtils::ok);
+        }
 
-    @PostMapping("/by-references")
-    public Mono<ResponseEntity<ResponseBody<List<WatchEntity>>>> getWatchesByReferences(
-            @RequestBody WatchReferencesRequest request
-    ) {
-        return watchService.getWatchesByReferences(request.getReferences())
+        return watchQueryService.search(filter, req)
                 .map(ControllerUtils::ok);
     }
 
-    @GetMapping("/price-range")
-    public Mono<ResponseEntity<ResponseBody<List<WatchEntity>>>> findByPriceRange(
-            @RequestParam("min") Double min,
-            @RequestParam("max") Double max
+    /**
+     * Facetas (brand, modelo, color, condicion, bracelet, rangos de año y precio, monedas, etc.)
+     * Útil para poblar filtros del frontend.
+     */
+    @PostMapping("/facets")
+    public Mono<ResponseEntity<ResponseBody<FacetsResponse>>> facets(
+            @RequestBody(required = false) WatchFilter filter
     ) {
-        return watchService.findWatchesByPriceRange(min, max)
+        return watchQueryService.facets(filter)
                 .map(ControllerUtils::ok);
     }
 
+    /**
+     * Resumen de un modelo: min/max precio, condiciones, colores, años,
+     * última fecha de carga y monedas presentes.
+     */
+    @GetMapping("/summary/{modelo}")
+    public Mono<ResponseEntity<ResponseBody<ModelSummary>>> summarizeModel(
+            @PathVariable("modelo") String modelo
+    ) {
+        return watchQueryService.summarizeModel(modelo)
+                .map(ControllerUtils::ok);
+    }
+
+    /**
+     * Dashboard por marca: top modelos, stats de precio por día, condiciones más comunes, etc.
+     * Puedes pasar filtros adicionales en el body (e.g. por rango de fechas o moneda).
+     */
+    @PostMapping("/brand-dashboard/{brand}")
+    public Mono<ResponseEntity<ResponseBody<BrandDashboard>>> brandDashboard(
+            @PathVariable("brand") String brand,
+            @RequestBody(required = false) WatchFilter extraFilters
+    ) {
+        return watchQueryService.brandDashboard(brand, extraFilters)
+                .map(ControllerUtils::ok);
+    }
+
+    /**
+     * Historial de precios (últimos N días) para un modelo específico.
+     * Por defecto days=5.
+     */
     @GetMapping("/price-history")
-    public Mono<ResponseEntity<ResponseBody<List<WatchPriceHistoryResponse>>>> getPriceHistory(
-            @RequestParam String reference
+    public Mono<ResponseEntity<ResponseBody<List<WatchPriceHistoryResponse>>>> priceHistory(
+            @RequestParam("modelo") String modelo,
+            @RequestParam(name = "days", defaultValue = "5") int days
     ) {
-        return watchService.getPriceHistory(reference)
+        return watchQueryService.priceHistory(modelo, days)
                 .map(ControllerUtils::ok);
     }
 
+    /** =========================
+     *  Autocomplete (modelo / brand / referencia)
+     *  ========================= */
     @GetMapping("/autocomplete")
-    public Mono<ResponseEntity<ResponseBody<List<String>>>> autocomplete(@RequestParam String prefix) {
-        return watchService.autocompleteReference(prefix)
-                .map(ControllerUtils::ok);
-    }
-
-    @GetMapping("/summary/{reference}")
-    public Mono<ResponseEntity<ResponseBody<WatchReferenceSummaryResponse>>> getWatchSummaryByReference(
-            @PathVariable String reference
+    public Mono<ResponseEntity<ResponseBody<List<String>>>> autocomplete(
+            @RequestParam("prefix") String prefix
     ) {
-        return watchService.getWatchSummaryByReference(reference)
+        return watchQueryService.autocomplete(prefix)
                 .map(ControllerUtils::ok);
     }
 }

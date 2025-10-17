@@ -75,9 +75,5 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-    depends_on:
-      backend:
-        condition: service_healthy
-
 volumes:
   mysql_data:

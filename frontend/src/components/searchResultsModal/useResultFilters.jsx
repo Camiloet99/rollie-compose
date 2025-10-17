@@ -1,100 +1,82 @@
 import { useEffect, useMemo, useState } from "react";
 
 export default function useResultFilters(results, show) {
-  const [colorFilter, setColorFilter] = useState("");
+  // Filtros activos
+  const [brandFilter, setBrandFilter] = useState("");
+  const [estadoFilter, setEstadoFilter] = useState("");
+  const [colorFilter, setColorFilter] = useState(""); // Bracelet/Color
   const [conditionFilter, setConditionFilter] = useState("");
-  const [extraInfoFilter, setExtraInfoFilter] = useState("");
 
   // Reset de filtros al cerrar modal
   useEffect(() => {
     if (!show) {
+      setBrandFilter("");
+      setEstadoFilter("");
       setColorFilter("");
       setConditionFilter("");
-      setExtraInfoFilter("");
     }
   }, [show]);
 
-  const filteredResults = useMemo(() => {
-    return results.filter((watch) => {
-      const colorMatch = colorFilter ? watch.colorDial === colorFilter : true;
-      const conditionMatch = conditionFilter
-        ? watch.condition?.includes(conditionFilter)
-        : true;
-      const extraMatch = extraInfoFilter
-        ? watch.extraInfo?.toUpperCase().includes(extraInfoFilter)
-        : true;
-      return colorMatch && conditionMatch && extraMatch;
-    });
-  }, [results, colorFilter, conditionFilter, extraInfoFilter]);
+  // === Opciones (a partir de los resultados completos, sin “auto-filtrarse”) ===
+  const brandOptions = useMemo(() => {
+    const all = (results || []).map((r) => r.brand).filter(Boolean);
+    return Array.from(new Set(all)).sort();
+  }, [results]);
 
-  const filteredByAllExceptColor = useMemo(() => {
-    return results.filter((r) => {
-      const conditionMatch = conditionFilter
-        ? r.condition?.includes(conditionFilter)
-        : true;
-      const extraMatch = extraInfoFilter
-        ? r.extraInfo?.toUpperCase().includes(extraInfoFilter)
-        : true;
-      return conditionMatch && extraMatch;
-    });
-  }, [results, conditionFilter, extraInfoFilter]);
+  const estadoOptions = useMemo(() => {
+    const all = (results || []).map((r) => r.estado).filter(Boolean);
+    return Array.from(new Set(all)).sort();
+  }, [results]);
 
-  const filteredByAllExceptCondition = useMemo(() => {
-    return results.filter((r) => {
-      const colorMatch = colorFilter ? r.colorDial === colorFilter : true;
-      const extraMatch = extraInfoFilter
-        ? r.extraInfo?.toUpperCase().includes(extraInfoFilter)
-        : true;
-      return colorMatch && extraMatch;
-    });
-  }, [results, colorFilter, extraInfoFilter]);
-
-  const filteredByAllExceptExtra = useMemo(() => {
-    return results.filter((r) => {
-      const colorMatch = colorFilter ? r.colorDial === colorFilter : true;
-      const conditionMatch = conditionFilter
-        ? r.condition?.includes(conditionFilter)
-        : true;
-      return colorMatch && conditionMatch;
-    });
-  }, [results, colorFilter, conditionFilter]);
-
+  // Unificamos bracelet/color para el combo “Bracelet / Color”
   const colorOptions = useMemo(() => {
-    const all = filteredByAllExceptColor
-      .map((r) => r.colorDial)
-      .filter(Boolean);
-    return [...new Set(all)];
-  }, [filteredByAllExceptColor]);
+    const allBracelet = (results || []).map((r) => r.bracelet).filter(Boolean);
+    const allColor = (results || []).map((r) => r.color).filter(Boolean);
+    return Array.from(new Set([...allBracelet, ...allColor])).sort();
+  }, [results]);
 
   const conditionOptions = useMemo(() => {
-    const all = filteredByAllExceptCondition.flatMap((r) =>
-      r.condition ? r.condition.split(",").map((c) => c.trim()) : []
-    );
-    return [...new Set(all.filter(Boolean))];
-  }, [filteredByAllExceptCondition]);
+    // condicion puede venir como string simple o coma-separada
+    const all = (results || []).flatMap((r) => {
+      if (!r?.condicion) return [];
+      return String(r.condicion)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    });
+    return Array.from(new Set(all)).sort();
+  }, [results]);
 
-  const extraInfoOptions = useMemo(() => {
-    const all = filteredByAllExceptExtra.flatMap((r) =>
-      r.extraInfo
-        ? r.extraInfo.split(",").map((e) => e.trim().toUpperCase())
-        : []
-    );
-    return [...new Set(all.filter(Boolean))];
-  }, [filteredByAllExceptExtra]);
+  // === Aplicamos filtros sobre los resultados ===
+  const filteredResults = useMemo(() => {
+    return (results || []).filter((w) => {
+      const brandOk = brandFilter ? w.brand === brandFilter : true;
+      const estadoOk = estadoFilter ? w.estado === estadoFilter : true;
+      const colorOk = colorFilter
+        ? w.bracelet === colorFilter || w.color === colorFilter
+        : true;
+      const condOk = conditionFilter
+        ? w.condicion
+          ? String(w.condicion)
+              .split(",")
+              .map((s) => s.trim())
+              .includes(conditionFilter)
+          : false
+        : true;
 
-  // Resetea si la opción elegida desaparece
-  useEffect(() => {
-    if (colorFilter && !colorOptions.includes(colorFilter)) setColorFilter("");
-    if (conditionFilter && !conditionOptions.includes(conditionFilter))
-      setConditionFilter("");
-    if (extraInfoFilter && !extraInfoOptions.includes(extraInfoFilter))
-      setExtraInfoFilter("");
-  }, [colorOptions, conditionOptions, extraInfoOptions]);
+      return brandOk && estadoOk && colorOk && condOk;
+    });
+  }, [results, brandFilter, estadoFilter, colorFilter, conditionFilter]);
 
   return {
-    filters: { colorFilter, conditionFilter, extraInfoFilter },
-    setFilters: { setColorFilter, setConditionFilter, setExtraInfoFilter },
-    options: { colorOptions, conditionOptions, extraInfoOptions },
+    filters: { brandFilter, estadoFilter, colorFilter, conditionFilter },
+    setFilters: {
+      setBrandFilter,
+      setEstadoFilter,
+      setColorFilter,
+      setConditionFilter,
+    },
+    options: { brandOptions, estadoOptions, colorOptions, conditionOptions },
     filteredResults,
   };
 }

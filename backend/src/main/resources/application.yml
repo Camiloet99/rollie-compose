@@ -23,12 +23,19 @@ logging:
     org.springframework.security: INFO
 ---
 # R2DBC
+
 spring:
   r2dbc:
     show-sql: true
     url: r2dbc:pool:mysql://${DB_HOST}:${DB_PORT}/${DB_NAME}?sslMode=REQUIRED&serverTimezone=UTC
     username: ${DB_USER}
     password: ${DB_PASSWORD}
+#spring:
+ # r2dbc:
+  #  show-sql: true
+   # url: r2dbc:pool:mysql://127.0.0.1:3306/rollie?sslMode=DISABLED&serverTimezone=UTC
+   # username: root
+   # password: 1152225289
 
 python:
   service:

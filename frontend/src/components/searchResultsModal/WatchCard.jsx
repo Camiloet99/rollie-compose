@@ -31,6 +31,14 @@ function TierBadge({ tier }) {
 }
 
 export default function WatchCard({ watch, priceTier }) {
+  const price = watch.montoFinal ?? watch.monto ?? null;
+  const year = watch.anio || "Unknown";
+  const listed = watch.asOfDate
+    ? moment(watch.asOfDate).format("MMM D, YYYY")
+    : watch.createdAt
+    ? moment(watch.createdAt).format("MMM D, YYYY")
+    : "Unknown";
+
   return (
     <Card
       className="mb-3 shadow-sm border-0 rounded-4 p-3"
@@ -39,34 +47,56 @@ export default function WatchCard({ watch, priceTier }) {
       <Row>
         <Col md={6} className="d-flex flex-column justify-content-center">
           <div className="d-flex align-items-center justify-content-between">
-            <h5 className="fw-bold mb-2">{watch.referenceCode}</h5>
+            <h5 className="fw-bold mb-2">
+              {watch.brand ? `${watch.brand} ` : ""}
+              {watch.modelo || ""}
+            </h5>
             <TierBadge tier={priceTier} />
           </div>
 
           <div className="mb-1 text-muted small">
-            <strong>Production Year:</strong>{" "}
-            {watch.productionYear || "Unknown"}
+            <strong>Production Year:</strong> {year}
           </div>
 
           <div className="mb-1 text-muted small">
-            <strong>Listed:</strong>{" "}
-            {watch.createdAt
-              ? moment(watch.asOfDate).format("MMM D, YYYY")
-              : "Unknown"}
+            <strong>Listed:</strong> {listed}
           </div>
 
-          {watch.condition && (
+          {/* Estado y Condición */}
+          {(watch.estado || watch.condicion) && (
             <div className="mb-2">
-              <strong>Condition:</strong>{" "}
-              {renderBadges(watch.condition, "info")}
+              {watch.estado && (
+                <>
+                  <strong>Status:</strong>{" "}
+                  {renderBadges(watch.estado, "secondary")}
+                  <span className="me-2" />
+                </>
+              )}
+              {watch.condicion && (
+                <>
+                  <strong>Condition:</strong>{" "}
+                  {renderBadges(watch.condicion, "info")}
+                </>
+              )}
             </div>
           )}
 
-          {watch.colorDial && (
+          {/* Color */}
+          {watch.color && (
             <div className="mb-2">
               <strong>Color:</strong>{" "}
               <Badge bg="dark" className="me-1 text-capitalize">
-                {watch.colorDial}
+                {watch.color}
+              </Badge>
+            </div>
+          )}
+
+          {/* Bracelet */}
+          {watch.bracelet && (
+            <div className="mb-2">
+              <strong>Bracelet:</strong>{" "}
+              <Badge bg="light" text="dark" className="me-1 text-capitalize">
+                {watch.bracelet}
               </Badge>
             </div>
           )}
@@ -76,14 +106,12 @@ export default function WatchCard({ watch, priceTier }) {
           md={3}
           className="d-flex flex-column justify-content-center align-items-start"
         >
-          {watch.extraInfo && (
-            <div className="mb-3">
-              <strong>Extra Info:</strong>{" "}
-              {renderBadges(watch.extraInfo, "warning", true)}
-            </div>
-          )}
+          {/* Precio + moneda en claro */}
           <div className="fw-semibold fs-5 text-success mb-1">
-            {formatPrice(watch.cost, "USD")}
+            {formatPrice(price, watch.currency || "USD")}{" "}
+            {watch.currency && (
+              <span className="text-muted small ms-1">({watch.currency})</span>
+            )}
           </div>
         </Col>
 

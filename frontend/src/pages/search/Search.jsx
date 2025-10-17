@@ -40,6 +40,8 @@ const DEFAULT_FILTERS = {
   extraInfo: "",
   window: "",
   adv: "",
+  estado: "",
+  sort: "",
 };
 
 export default function Search() {
@@ -63,7 +65,6 @@ export default function Search() {
   const [filters, setFilters] = usePersistentSearchParams(DEFAULT_FILTERS);
 
   const [showAdvanced, setShowAdvanced] = useState(Boolean(filters.adv));
-  const [results, setResults] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [historyRefreshToggle, setHistoryRefreshToggle] = useState(false);
   const [limitExceeded, setLimitExceeded] = useState(false);
@@ -91,12 +92,15 @@ export default function Search() {
   }, [
     filters.reference,
     filters.color,
+    filters.brand, // NEW
+    filters.estado,
     filters.year,
     filters.condition,
     filters.priceMin,
     filters.priceMax,
     filters.currency,
     filters.extraInfo,
+    filters.sort,
     showAdvanced,
   ]);
 
@@ -157,9 +161,9 @@ export default function Search() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAdvanced]);
 
-  // Ejecuta la búsqueda; window se toma de Advanced solo si Advanced está activo
   const runSearch = async (activeFilters, p = page, s = size) => {
     const ref = activeFilters.reference?.trim();
+    const sort = activeFilters.sort || "date_desc"; // ← tu UI puede setear esto
 
     const win =
       showAdvancedEnabled && showAdvanced
@@ -178,7 +182,8 @@ export default function Search() {
           hasPrev: false,
         };
       }
-      return await getWatchByReference(ref, user.userId, p, s);
+      // ahora acepta sort
+      return await getWatchByReference(ref, user.userId, p, s, sort);
     }
 
     const payload = {
@@ -194,8 +199,14 @@ export default function Search() {
         : null,
       currency: activeFilters.currency || null,
       watchInfo: activeFilters.extraInfo || null,
+
+      // NUEVOS opcionales si los tienes en el UI:
+      brand: activeFilters.brand || null,
+      bracelet: activeFilters.bracelet || null,
+      estado: activeFilters.estado || null,
     };
-    return await searchWatches(payload, user.userId, win, p, s);
+
+    return await searchWatches(payload, user.userId, win, p, s, sort);
   };
 
   const handleSearch = async (e) => {

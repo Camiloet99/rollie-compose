@@ -1,0 +1,45 @@
+# === Node / Frontend ===
+frontend/node_modules/
+frontend/build/
+frontend/.DS_Store
+
+# === Python ===
+python-service/__pycache__/
+python-service/venv/
+python-service/.venv
+python-service/uploads/
+python-service/*.pyc
+python-service/.pytest_cache/
+python-service/.DS_Store
+
+# === Java / Maven ===
+backend/target/
+backend/.classpath
+backend/.project
+backend/.settings/
+backend/.DS_Store
+
+# === Docker / Local ===
+dockerlocal/
+init-sql/.DS_Store
+
+# === System / IDE ===
+*.log
+*.tmp
+*.swp
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# === Environments ===
+.env
+.env.local
+.env.*.local
+
+# === OS / Misc ===
+**/.DS_Store
+**/__pycache__/
+**/venv/
+**/node_modules/
+**/target/
