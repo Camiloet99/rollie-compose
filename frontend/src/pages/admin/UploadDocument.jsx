@@ -62,7 +62,20 @@ export default function UploadDocument() {
   };
 
   const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
+    const f = e.target.files?.[0];
+    if (!f) {
+      setFile(null);
+      return;
+    }
+    // Validación estricta: solo .csv o .xlsx
+    const okExt = /\.(csv|xlsx)$/i.test(f.name || "");
+    if (!okExt) {
+      toast.error("Only .csv or .xlsx files are supported.");
+      e.target.value = ""; // reset input
+      setFile(null);
+      return;
+    }
+    setFile(f);
   };
 
   const fetchLogs = async () => {
@@ -84,6 +97,11 @@ export default function UploadDocument() {
       toast.error("Please select a file to upload.");
       return;
     }
+    // Doble chequeo por si el input fue manipulado
+    if (!/\.(csv|xlsx)$/i.test(file.name || "")) {
+      toast.error("Only .csv or .xlsx files are supported.");
+      return;
+    }
 
     if (!asOfDate || dayjs(asOfDate).isAfter(dayjs(), "day")) {
       toast.error("Please choose a valid date (today or in the past).");
@@ -95,7 +113,7 @@ export default function UploadDocument() {
       await uploadDocument(file, asOfDate);
       toast.success("File uploaded successfully.");
       setFile(null);
-      setAsOfDate(todayStr); // opcional: resetear a hoy
+      setAsOfDate(todayStr);
       fetchLogs();
     } catch (error) {
       toast.error("Upload failed. Please try again.");
@@ -135,20 +153,23 @@ export default function UploadDocument() {
           <div className="text-center mb-4">
             <h4 className="fw-semibold mb-2">Upload Price Document</h4>
             <p className="text-muted small">
-              Upload a recent Excel file (.xlsx) with the latest watch prices.
+              Upload a recent CSV or Excel file (.csv / .xlsx) with the latest
+              watch prices.
             </p>
           </div>
 
           <Form onSubmit={handleUpload}>
             <Form.Group controlId="formFile" className="mb-3">
-              <Form.Label className="fw-semibold">Excel File</Form.Label>
+              <Form.Label className="fw-semibold">CSV / Excel File</Form.Label>
               <Form.Control
                 type="file"
-                accept=".xlsx"
+                accept=".csv,.xlsx"
                 onChange={handleFileChange}
                 disabled={loading}
               />
-              <Form.Text muted>Only .xlsx format is supported.</Form.Text>
+              <Form.Text muted>
+                Only .csv or .xlsx formats are supported.
+              </Form.Text>
             </Form.Group>
 
             <Form.Group controlId="formAsOfDate" className="mb-3">
@@ -250,7 +271,7 @@ export default function UploadDocument() {
                 <thead className="table-light">
                   <tr>
                     <th>Filename</th>
-                    <th>Data As Of</th> {/* NEW */}
+                    <th>Data As Of</th>
                     <th>Upload Time</th>
                   </tr>
                 </thead>
