@@ -27,8 +27,8 @@ logging:
 spring:
   r2dbc:
     show-sql: true
-    url: r2dbc:pool:mysql://localhost:3307/rollie?sslMode=DISABLED&serverTimezone=UTC
-    #r2dbc:pool:mysql://${DB_HOST}:${DB_PORT}/${DB_NAME}?sslMode=REQUIRED&serverTimezone=UTC
+    #url: r2dbc:pool:mysql://localhost:3307/rollie?sslMode=DISABLED&serverTimezone=UTC
+    url: r2dbc:pool:mysql://${DB_HOST}:${DB_PORT}/${DB_NAME}?sslMode=REQUIRED&serverTimezone=UTC
     username: ${DB_USER}
     password: ${DB_PASSWORD}
 #spring:
