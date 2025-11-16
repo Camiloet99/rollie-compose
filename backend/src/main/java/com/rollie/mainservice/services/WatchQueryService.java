@@ -24,7 +24,6 @@ public class WatchQueryService {
     private final DatabaseClient databaseClient;
     private final ExchangeRateService exchangeRateService;
 
-
     public Mono<List<String>> autocomplete(String prefix) {
         if (prefix == null || prefix.trim().isEmpty()) {
             return Mono.just(java.util.Collections.emptyList());
@@ -132,28 +131,29 @@ public class WatchQueryService {
     }
 
 
-    public Mono<PageResult<WatchEntity>> averageByWindow(WatchFilter f, String window, PageRequestEx req) {
-        // Debe venir brand o modelo
+    public Mono<PageResult<WatchEntity>> averageByWindow(WatchFilter f,
+                                                         String window,
+                                                         PageRequestEx req,
+                                                         String avgModeStr) {
+        // Debe venir brand o modelo (igual que antes)
         boolean hasBrand  = f.getBrand()  != null && !f.getBrand().trim().isEmpty();
         boolean hasModelo = f.getModelo() != null && !f.getModelo().trim().isEmpty();
         if (!hasBrand && !hasModelo) {
             return Mono.error(new IllegalArgumentException("Missing brand or modelo for average search"));
         }
 
+        // Modo de promedio: ALL (default), LOW, MID, HIGH
+        AvgMode avgMode = AvgMode.from(avgModeStr);
+
         // Ventana: today / 7d / 15d  (rango inclusivo)
-        final java.time.LocalDate to   = java.time.LocalDate.now();
-        final java.time.LocalDate from =
+        final LocalDate to   = LocalDate.now();
+        final LocalDate from =
                 "7d".equalsIgnoreCase(window)  ? to.minusDays(6) :
                         "15d".equalsIgnoreCase(window) ? to.minusDays(14) : to; // default: today
 
-        final int size   = Math.max(1, Math.min(req.getSize() == 0 ? 50 : req.getSize(), 200));
-        final int page   = Math.max(0, req.getPage());
-        final int offset = page * size;
-
-        // WHERE dinámico
+        // WHERE dinámico (similar al método anterior, pero SIN group/AVG)
         StringBuilder where = new StringBuilder(" WHERE as_of_date BETWEEN :from AND :to ");
-        Map<String, Object> params = new java.util.HashMap<>();
-        // >>> CLAVE: bindear LocalDate, NO java.sql.Date
+        Map<String, Object> params = new HashMap<>();
         params.put("from", from);
         params.put("to",   to);
 
@@ -163,11 +163,21 @@ public class WatchQueryService {
         if (nonEmpty(f.getCondicion())) { where.append(" AND UPPER(condicion)= UPPER(:condicion) ");  params.put("condicion", f.getCondicion().trim()); }
         if (nonEmpty(f.getBracelet()))  { where.append(" AND UPPER(bracelet) = UPPER(:bracelet) ");   params.put("bracelet", f.getBracelet().trim()); }
         if (nonEmpty(f.getEstado()))    { where.append(" AND UPPER(estado)   = UPPER(:estado) ");     params.put("estado", f.getEstado().trim()); }
-        if (f.getAnio() != null)        { where.append(" AND anio = :anio ");                         params.put("anio", f.getAnio()); }
-        else {
-            if (f.getAnioFrom() != null){ where.append(" AND anio >= :anioFrom ");                    params.put("anioFrom", f.getAnioFrom()); }
-            if (f.getAnioTo()   != null){ where.append(" AND anio <= :anioTo ");                      params.put("anioTo",   f.getAnioTo()); }
+
+        if (f.getAnio() != null)        {
+            where.append(" AND anio = :anio ");
+            params.put("anio", f.getAnio());
+        } else {
+            if (f.getAnioFrom() != null){
+                where.append(" AND anio >= :anioFrom ");
+                params.put("anioFrom", f.getAnioFrom());
+            }
+            if (f.getAnioTo()   != null){
+                where.append(" AND anio <= :anioTo ");
+                params.put("anioTo",   f.getAnioTo());
+            }
         }
+
         if (f.getPriceMin() != null)    { where.append(" AND monto_final >= :pmin ");                 params.put("pmin", f.getPriceMin()); }
         if (f.getPriceMax() != null)    { where.append(" AND monto_final <= :pmax ");                 params.put("pmax", f.getPriceMax()); }
         if (nonEmpty(f.getCurrency()))  { where.append(" AND UPPER(currency) = UPPER(:curr) ");       params.put("curr", f.getCurrency().trim()); }
@@ -179,67 +189,186 @@ public class WatchQueryService {
             params.put("txt", effectiveText.trim());
         }
 
-        // Orden (sobre el promedio)
-        String sortKey = (req.getSort() == null) ? "price_desc" : req.getSort();
-        String orderBy;
-        if ("price_asc".equalsIgnoreCase(sortKey)) {
-            orderBy = " ORDER BY AVG(monto_final) ASC ";
-        } else if ("price_desc".equalsIgnoreCase(sortKey)) {
-            orderBy = " ORDER BY AVG(monto_final) DESC ";
-        } else if ("brand_asc".equalsIgnoreCase(sortKey)) {
-            orderBy = " ORDER BY brand ASC, modelo ASC ";
-        } else if ("brand_desc".equalsIgnoreCase(sortKey)) {
-            orderBy = " ORDER BY brand DESC, modelo DESC ";
-        } else {
-            orderBy = " ORDER BY AVG(monto_final) DESC ";
-        }
-        // Query agregada (una fila por brand+modelo+currency)
-        String baseGrouped =
-                "SELECT " +
-                        "  NULL AS id, " +
-                        "  NULL AS fecha_archivo, " +
-                        "  NULL AS clean_text, " +
-                        "  brand, " +
-                        "  modelo, " +
-                        "  currency, " +
-                        "  NULL AS monto, " +
-                        "  NULL AS descuento, " +
-                        "  AVG(monto_final) AS monto_final, " +  // promedio
-                        "  NULL AS estado, " +
-                        "  NULL AS condicion, " +
-                        "  NULL AS anio, " +
-                        "  NULL AS bracelet, " +
-                        "  NULL AS color, " +
-                        "  MAX(as_of_date)  AS as_of_date, " +   // último as_of_date de la ventana
-                        "  MAX(created_at)  AS created_at " +
-                        "FROM watches ";
+        // Query cruda: traemos filas individuales, sin AVG ni GROUP BY
+        String sql =
+                "SELECT brand, modelo, currency, monto_final, as_of_date, created_at " +
+                        "FROM watches " + where.toString();
 
-        String group = " GROUP BY brand, modelo, currency ";
-
-        String sqlCount = "SELECT COUNT(*) AS c FROM ( " + baseGrouped + where + group + " ) t";
-        String sqlItems = baseGrouped + where + group + orderBy + " LIMIT :limit OFFSET :offset ";
-
-        DatabaseClient.GenericExecuteSpec countSpec = databaseClient.sql(sqlCount);
-        DatabaseClient.GenericExecuteSpec itemSpec  = databaseClient.sql(sqlItems);
-
-        // Bind de todos los params (incluyendo LocalDate)
+        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
         for (Map.Entry<String, Object> e : params.entrySet()) {
-            countSpec = countSpec.bind(e.getKey(), e.getValue());
-            itemSpec  = itemSpec.bind(e.getKey(), e.getValue());
+            spec = spec.bind(e.getKey(), e.getValue());
         }
-        itemSpec = itemSpec.bind("limit", size).bind("offset", offset);
 
-        Mono<Long> totalMono = countSpec.map((row, meta) -> {
-            Object v = row.get("c");
-            if (v instanceof Number) return ((Number) v).longValue();
-            return Long.parseLong(String.valueOf(v));
-        }).one();
+        return spec.map((row, meta) -> new RowLite(row))
+                .all()
+                .collectList()
+                .map(rows -> {
+                    // 1) agrupar por brand + modelo + currency
+                    Map<String, List<RowLite>> grouped = rows.stream().collect(
+                            Collectors.groupingBy(r -> {
+                                String b   = r.get("brand", String.class);
+                                String m   = r.get("modelo", String.class);
+                                String cur = r.get("currency", String.class);
+                                return (b == null ? "" : b) + "|" +
+                                        (m == null ? "" : m) + "|" +
+                                        (cur == null ? "" : cur);
+                            })
+                    );
 
-        Mono<List<WatchEntity>> itemsMono = itemSpec.map(this::mapRow).all().collectList();
+                    List<WatchEntity> aggregates = new ArrayList<>();
 
-        return Mono.zip(totalMono, itemsMono)
-                .map(t -> PageResult.of(t.getT2(), t.getT1(), page, size));
+                    for (Map.Entry<String, List<RowLite>> entry : grouped.entrySet()) {
+                        List<RowLite> groupRows = entry.getValue();
+
+                        // precios ordenados
+                        List<BigDecimal> prices = groupRows.stream()
+                                .map(r -> r.get("monto_final", BigDecimal.class))
+                                .filter(Objects::nonNull)
+                                .sorted()
+                                .collect(Collectors.toList());
+
+                        if (prices.isEmpty()) continue;
+
+                        double avgPrice = computeAvgByMode(prices, avgMode);
+
+                        // tomamos datos base de la primera fila (brand/modelo/currency)
+                        RowLite base = groupRows.get(0);
+                        String brand  = base.get("brand", String.class);
+                        String modelo = base.get("modelo", String.class);
+                        String curr   = base.get("currency", String.class);
+
+                        // última fecha en la ventana
+                        LocalDate lastAsOf = groupRows.stream()
+                                .map(r -> r.get("as_of_date", LocalDate.class))
+                                .filter(Objects::nonNull)
+                                .max(Comparator.naturalOrder())
+                                .orElse(null);
+
+                        // último created_at en la ventana
+                        LocalDateTime lastCreated = groupRows.stream()
+                                .map(r -> r.get("created_at", LocalDateTime.class))
+                                .filter(Objects::nonNull)
+                                .max(Comparator.naturalOrder())
+                                .orElse(null);
+
+                        WatchEntity we = WatchEntity.builder()
+                                .id(null)
+                                .fechaArchivo(null)
+                                .cleanText(null)
+                                .brand(brand)
+                                .modelo(modelo)
+                                .currency(curr)
+                                .monto(null)
+                                .descuento(null)
+                                .montoFinal(BigDecimal.valueOf(avgPrice))
+                                .estado(null)
+                                .condicion(null)
+                                .anio(null)
+                                .bracelet(null)
+                                .color(null)
+                                .asOfDate(lastAsOf)
+                                .createdAt(lastCreated)
+                                .build();
+
+                        aggregates.add(we);
+                    }
+
+                    // 2) Ordenar según sort (price / brand / date)
+                    String sortKey = (req.getSort() == null) ? "price_desc" : req.getSort();
+                    Comparator<WatchEntity> cmp;
+                    switch (sortKey.toLowerCase()) {
+                        case "price_asc":
+                            cmp = Comparator.comparing(
+                                    WatchEntity::getMontoFinal,
+                                    Comparator.nullsLast(BigDecimal::compareTo)
+                            );
+                            break;
+                        case "price_desc":
+                            cmp = Comparator.comparing(
+                                    WatchEntity::getMontoFinal,
+                                    Comparator.nullsLast(BigDecimal::compareTo)
+                            ).reversed();
+                            break;
+                        case "brand_asc":
+                            cmp = Comparator
+                                    .comparing(WatchEntity::getBrand, Comparator.nullsLast(String::compareTo))
+                                    .thenComparing(WatchEntity::getModelo, Comparator.nullsLast(String::compareTo));
+                            break;
+                        case "brand_desc":
+                            cmp = Comparator
+                                    .comparing(WatchEntity::getBrand, Comparator.nullsLast(String::compareTo)).reversed()
+                                    .thenComparing(WatchEntity::getModelo, Comparator.nullsLast(String::compareTo)).reversed();
+                            break;
+                        default:
+                            // por fecha (createdAt)
+                            cmp = Comparator.comparing(
+                                    WatchEntity::getCreatedAt,
+                                    Comparator.nullsLast(LocalDateTime::compareTo)
+                            ).reversed();
+                    }
+
+                    aggregates.sort(cmp);
+
+                    // 3) Paginación en memoria
+                    int size = Math.max(1, Math.min(req.getSize() == 0 ? 50 : req.getSize(), 200));
+                    int page = Math.max(0, req.getPage());
+                    int total = aggregates.size();
+
+                    int fromIx = Math.min(page * size, total);
+                    int toIx   = Math.min(fromIx + size, total);
+
+                    List<WatchEntity> pageItems =
+                            (fromIx >= toIx) ? Collections.emptyList() : aggregates.subList(fromIx, toIx);
+
+                    return PageResult.of(pageItems, total, page, size);
+                });
     }
+
+    private double computeAvgByMode(List<BigDecimal> sortedPrices, AvgMode mode) {
+        int n = sortedPrices.size();
+        if (n == 0) return 0;
+
+        // convertimos a double para facilitar
+        List<Double> vals = sortedPrices.stream()
+                .map(BigDecimal::doubleValue)
+                .sorted()
+                .collect(Collectors.toList());
+
+        if (mode == AvgMode.ALL) {
+            return vals.stream().mapToDouble(Double::doubleValue).average().orElse(0);
+        }
+
+        // dividimos en 3 terciles
+        int tercilSize = Math.max(1, n / 3); // al menos 1 elemento
+
+        int start, end;
+        switch (mode) {
+            case LOW:
+                start = 0;
+                end   = tercilSize;
+                break;
+            case MID:
+                start = tercilSize;
+                end   = Math.min(2 * tercilSize, n);
+                // si n < 3, ajustamos para que haya algo
+                if (start >= end) {
+                    start = 0;
+                    end = n;
+                }
+                break;
+            case HIGH:
+            default:
+                start = Math.max(n - tercilSize, 0);
+                end   = n;
+                break;
+        }
+
+        return vals.subList(start, end).stream()
+                .mapToDouble(Double::doubleValue)
+                .average()
+                .orElse(0);
+    }
+
 
 
     /* ======================

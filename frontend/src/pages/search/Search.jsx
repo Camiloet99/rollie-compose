@@ -28,19 +28,20 @@ import CompareButton from "../../components/compare/CompareButton";
 import CompareDrawer from "../../components/compare/CompareDrawer";
 
 const DEFAULT_FILTERS = {
-  reference: "",
+  reference: "", // se mapea a modelo / referencia principal
   brand: "",
-  condition: "",
-  color: "",
-  material: "",
+  estado: "",
+  condition: "", // se mapea a 'condicion'
   year: "",
+  bracelet: "",
+  color: "",
+  currency: "",
   priceMin: "",
   priceMax: "",
-  currency: "",
-  extraInfo: "",
+  text: "", // texto libre -> clean_text u otros campos
   window: "",
+  avgMode: "", // ⬅️ NEW
   adv: "",
-  estado: "",
   sort: "",
 };
 
@@ -92,15 +93,18 @@ export default function Search() {
   }, [
     filters.reference,
     filters.color,
-    filters.brand, // NEW
+    filters.brand,
     filters.estado,
     filters.year,
     filters.condition,
     filters.priceMin,
     filters.priceMax,
     filters.currency,
-    filters.extraInfo,
+    filters.bracelet,
+    filters.text,
     filters.sort,
+    filters.window, // ⬅️ importante
+    filters.avgMode, // ⬅️ también
     showAdvanced,
   ]);
 
@@ -109,6 +113,14 @@ export default function Search() {
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const abortRef = useRef(null);
   const debounceRef = useRef(null);
+  const [suppressNextAutocomplete, setSuppressNextAutocomplete] =
+    useState(false);
+
+  useEffect(() => {
+    if (!filters.window && filters.avgMode) {
+      setFilters((prev) => ({ ...prev, avgMode: "" }));
+    }
+  }, [filters.window, filters.avgMode, setFilters]);
 
   useEffect(() => {
     if (!autocompleteEnabled) {
@@ -116,6 +128,13 @@ export default function Search() {
       setSuggestionsOpen(false);
       return;
     }
+
+    // ⬅️ si acabamos de seleccionar una sugerencia, saltamos este ciclo
+    if (suppressNextAutocomplete) {
+      setSuppressNextAutocomplete(false);
+      return;
+    }
+
     const value = `${filters.reference ?? ""}`.trim();
     if (value.length < 3) {
       setReferenceSuggestions([]);
@@ -147,9 +166,12 @@ export default function Search() {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [filters.reference, autocompleteEnabled]);
+  }, [filters.reference, autocompleteEnabled, suppressNextAutocomplete]);
 
   const onPickSuggestion = (val, _setFilters) => {
+    // NEW: evita que el useEffect vuelva a abrir el dropdown en este cambio
+    setSuppressNextAutocomplete(true);
+
     _setFilters((prev) => ({ ...prev, reference: val }));
     setReferenceSuggestions([]);
     setSuggestionsOpen(false);
@@ -163,13 +185,14 @@ export default function Search() {
 
   const runSearch = async (activeFilters, p = page, s = size) => {
     const ref = activeFilters.reference?.trim();
-    const sort = activeFilters.sort || "date_desc"; // ← tu UI puede setear esto
+    const sort = activeFilters.sort || "date_desc";
 
     const win =
       showAdvancedEnabled && showAdvanced
         ? String(activeFilters.window ?? "").toLowerCase()
         : "";
 
+    // Búsqueda simple por referencia (modelo)
     if (!showAdvancedEnabled || !showAdvanced) {
       if (!ref) {
         return {
@@ -182,35 +205,57 @@ export default function Search() {
           hasPrev: false,
         };
       }
-      // ahora acepta sort
+      // este endpoint sigue igual
       return await getWatchByReference(ref, user.userId, p, s, sort);
     }
 
+    // ==== BÚSQUEDA AVANZADA: WatchFilter ALIGNADO CON BACKEND ====
     const payload = {
-      referenceCode: ref || null,
-      colorDial: activeFilters.color || null,
-      productionYear: activeFilters.year ? parseInt(activeFilters.year) : null,
-      condition: activeFilters.condition || null,
-      minPrice: activeFilters.priceMin
-        ? parseFloat(activeFilters.priceMin)
-        : null,
-      maxPrice: activeFilters.priceMax
-        ? parseFloat(activeFilters.priceMax)
-        : null,
-      currency: activeFilters.currency || null,
-      watchInfo: activeFilters.extraInfo || null,
+      // referencia principal: el backend la mapea a modelo
+      modelo: ref || null,
 
-      // NUEVOS opcionales si los tienes en el UI:
+      // Campos directos según WatchFilter
       brand: activeFilters.brand || null,
+      color: activeFilters.color || null,
+      condicion: activeFilters.condition || null,
       bracelet: activeFilters.bracelet || null,
       estado: activeFilters.estado || null,
+
+      // Año exacto (si quisieras rangos, usarías anioFrom/anioTo)
+      anio: activeFilters.year ? parseInt(activeFilters.year, 10) : null,
+
+      // Rango de precio sobre monto_final
+      priceMin: activeFilters.priceMin
+        ? parseFloat(activeFilters.priceMin)
+        : null,
+      priceMax: activeFilters.priceMax
+        ? parseFloat(activeFilters.priceMax)
+        : null,
+
+      // Moneda
+      currency: activeFilters.currency || null,
+
+      // Texto libre -> clean_text
+      text: activeFilters.text || null,
     };
 
-    return await searchWatches(payload, user.userId, win, p, s, sort);
+    const avgMode = activeFilters.avgMode || null;
+
+    return await searchWatches(
+      payload,
+      user.userId,
+      win,
+      p,
+      s,
+      sort,
+      avgMode // ⬅️ NEW
+    );
   };
 
   const handleSearch = async (e) => {
     e?.preventDefault?.();
+
+    setSuggestionsOpen(false);
     if (!Object.values(filters).some((val) => val)) return;
 
     try {
@@ -266,7 +311,10 @@ export default function Search() {
           prevFilters.priceMin?.length ||
           prevFilters.priceMax?.length ||
           prevFilters.currency?.length ||
-          prevFilters.extraInfo?.length);
+          prevFilters.brand?.length ||
+          prevFilters.bracelet?.length ||
+          prevFilters.estado?.length ||
+          prevFilters.text?.length); // NEW: texto libre
 
       setShowAdvanced(Boolean(isAdvanced));
 

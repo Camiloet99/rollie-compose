@@ -72,6 +72,34 @@ def parse_anio_safe(v):
         return None
     return None
 
+@app.delete("/watches/by-as-of/{asOfDate}")
+def delete_watches_by_as_of(asOfDate: str, db: Session = Depends(get_db)):
+    """
+    Elimina todos los registros Watch con un as_of_date específico.
+    Se usará desde el mainservice cuando se elimine un documento.
+    """
+    try:
+        as_of = date.fromisoformat(asOfDate)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="asOfDate must be YYYY-MM-DD")
+
+    try:
+        deleted_count = (
+            db.query(Watch)
+            .filter(Watch.as_of_date == as_of)
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting watches: {e}")
+
+    return {
+        "status": "ok",
+        "asOfDate": as_of.isoformat(),
+        "deleted": deleted_count,
+    }
+
 @app.post("/clean-watches/")
 async def clean_watches(
     file: UploadFile = File(...),

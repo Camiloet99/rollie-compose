@@ -2,16 +2,40 @@
 import api from "./api";
 
 // 1) Búsqueda simple por modelo exacto
-export const getWatchByReference = async (reference, _userId, page = 0, size = 20, sort = "date_desc") => {
+export const getWatchByReference = async (
+  reference,
+  _userId,
+  page = 0,
+  size = 20,
+  sort = "date_desc"
+) => {
   const modelo = (reference ?? "").trim();
   if (!modelo) {
-    return { items: [], total: 0, page, size, pages: 1, hasNext: false, hasPrev: false };
+    return {
+      items: [],
+      total: 0,
+      page,
+      size,
+      pages: 1,
+      hasNext: false,
+      hasPrev: false,
+    };
   }
   try {
     const params = { page, size, sort: normalizeSort(sort) };
     const body = { modelo };
     const res = await api.post(`/watches/query`, body, { params });
-    return res.data?.result || { items: [], total: 0, page, size, pages: 1, hasNext: false, hasPrev: false };
+    return (
+      res.data?.result || {
+        items: [],
+        total: 0,
+        page,
+        size,
+        pages: 1,
+        hasNext: false,
+        hasPrev: false,
+      }
+    );
   } catch (err) {
     console.error("Error getting watch by reference:", err);
     throw err?.response ?? err;
@@ -25,7 +49,8 @@ export const searchWatches = async (
   window = "",
   page = 0,
   size = 20,
-  sort = "date_desc"
+  sort = "date_desc",
+  avgMode = "" // ⬅️ NEW
 ) => {
   try {
     const win = normalizeWindow(window); // "", "today", "7d", "15d"
@@ -45,10 +70,14 @@ export const searchWatches = async (
       priceMin: payload?.minPrice ?? payload?.priceMin ?? null,
       priceMax: payload?.maxPrice ?? payload?.priceMax ?? null,
       currency: safeTrim(payload?.currency) || null,
-      info: safeTrim(payload?.watchInfo ?? payload?.extraInfo) || null,
+
+      // texto libre -> se mapea a info, que el backend usa junto con text
+      info:
+        safeTrim(payload?.watchInfo ?? payload?.extraInfo ?? payload?.text) ||
+        null,
     };
 
-    // Si NO es average, permitimos filtrar por rango explícito
+    // Si NO es average, permitimos filtrar por rango explícito (asOfFrom / asOfTo)
     const range = isAverage ? {} : windowToRange(win); // { asOfFrom, asOfTo } o {}
     const body = { ...bodyBase, ...range };
 
@@ -70,10 +99,17 @@ export const searchWatches = async (
           },
         };
       }
-      params.window = win; // <-- clave: dispara el endpoint de promedio
+
+      params.window = win; // dispara el endpoint de promedio
+
+      // ⬅️ NUEVO: modo de promedio (all/low/mid/high)
+      if (avgMode) {
+        params.avgMode = avgMode; // se alinea con @RequestParam("avgMode") en el controller
+      }
     }
 
     const res = await api.post(`/watches/query`, body, { params });
+
     return (
       res.data?.result || {
         items: [],
@@ -102,7 +138,15 @@ function normalizeWindow(w) {
 function normalizeSort(s) {
   const v = safeTrim(s).toLowerCase();
   // soportados por el backend: date_desc (default), price_asc, price_desc, brand_asc, brand_desc
-  if (["price_asc", "price_desc", "brand_asc", "brand_desc", "date_desc"].includes(v))
+  if (
+    [
+      "price_asc",
+      "price_desc",
+      "brand_asc",
+      "brand_desc",
+      "date_desc",
+    ].includes(v)
+  )
     return v;
   return "date_desc";
 }
@@ -130,7 +174,6 @@ function fmt(d) {
   return `${y}-${m}-${day}`;
 }
 
-
 // === 3) POST: múltiples referencias ===
 export const getWatchesByReferences = async (references) => {
   try {
@@ -156,7 +199,9 @@ export const getWatchesByPriceRange = async (min, max) => {
 // === 5) GET: historial de precios ===
 export const getPriceHistory = async (reference) => {
   try {
-    const res = await api.get("/watches/price-history", { params: { reference } });
+    const res = await api.get("/watches/price-history", {
+      params: { reference },
+    });
     return res.data?.result || [];
   } catch (err) {
     console.error("Error getting price history:", err);

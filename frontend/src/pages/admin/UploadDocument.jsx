@@ -8,6 +8,7 @@ import {
   Spinner,
   Alert,
   Table,
+  Badge,
 } from "react-bootstrap";
 import { useAuth } from "../../contexts/AuthContext";
 import { toast } from "react-toastify";
@@ -16,6 +17,7 @@ import dayjs from "dayjs";
 import {
   uploadDocument,
   getUploadedDocuments,
+  deleteUploadedDocument, // NEW
 } from "../../services/documentService";
 import {
   getMarkupPercentage,
@@ -31,6 +33,9 @@ export default function UploadDocument() {
   const [markup, setMarkup] = useState(0);
   const [markupLoading, setMarkupLoading] = useState(true);
   const [updatingMarkup, setUpdatingMarkup] = useState(false);
+
+  // NEW: id del documento que se está borrando
+  const [deletingId, setDeletingId] = useState(null);
 
   // NEW: fecha de referencia ("as of")
   const todayStr = useMemo(() => dayjs().format("YYYY-MM-DD"), []);
@@ -122,6 +127,34 @@ export default function UploadDocument() {
     }
   };
 
+  // NEW: manejador para eliminar documento + relojes asociados
+  const handleDeleteDocument = async (log) => {
+    const prettyDate = log.asOfDate
+      ? dayjs(log.asOfDate).format("YYYY-MM-DD")
+      : "N/A";
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete:\n\n` +
+        `• File: ${log.filename}\n` +
+        `• Data as of: ${prettyDate}\n\n` +
+        `This will also remove ALL watches associated with this date.`
+    );
+
+    if (!confirmed) return;
+
+    setDeletingId(log.id);
+    try {
+      await deleteUploadedDocument(log.id);
+      toast.success("Document and associated watches deleted.");
+      // Refrescar lista local sin hacer otra petición
+      setLogs((prev) => prev.filter((l) => l.id !== log.id));
+    } catch (err) {
+      toast.error("Failed to delete document. Please try again.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   useEffect(() => {
     if (user && user.role === "ADMIN") {
       fetchLogs();
@@ -146,6 +179,7 @@ export default function UploadDocument() {
       </Helmet>
 
       <Container className="d-flex flex-column align-items-center mt-5">
+        {/* CARD: Upload */}
         <Card
           className="shadow-lg border-0 p-4 w-100 mb-4"
           style={{ maxWidth: "540px" }}
@@ -216,6 +250,7 @@ export default function UploadDocument() {
           )}
         </Card>
 
+        {/* CARD: Markup */}
         <Card
           className="shadow-sm border-0 p-4 w-100 mb-4"
           style={{ maxWidth: "540px" }}
@@ -254,9 +289,22 @@ export default function UploadDocument() {
           </Form>
         </Card>
 
+        {/* CARD: Uploaded Documents + Delete UI */}
         <Card className="shadow border-0 w-100" style={{ maxWidth: "720px" }}>
           <Card.Body>
-            <h5 className="fw-semibold mb-3">Uploaded Documents</h5>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <div>
+                <h5 className="fw-semibold mb-1">Uploaded Documents</h5>
+                <p className="text-muted small mb-0">
+                  Manage historical price files. Deleting a file will also
+                  remove the watches linked to its{" "}
+                  <span className="fw-semibold">Data As Of</span> date.
+                </p>
+              </div>
+              <Badge bg="dark" pill>
+                {logs.length} file{logs.length === 1 ? "" : "s"}
+              </Badge>
+            </div>
 
             {logsLoading ? (
               <div className="d-flex justify-content-center py-4">
@@ -267,17 +315,23 @@ export default function UploadDocument() {
                 No documents uploaded yet.
               </p>
             ) : (
-              <Table responsive bordered hover className="small mb-0">
+              <Table
+                responsive
+                bordered
+                hover
+                className="small mb-0 align-middle"
+              >
                 <thead className="table-light">
                   <tr>
                     <th>Filename</th>
                     <th>Data As Of</th>
                     <th>Upload Time</th>
+                    <th className="text-center">Actions</th> {/* NEW */}
                   </tr>
                 </thead>
                 <tbody>
-                  {logs.map((log, index) => (
-                    <tr key={index}>
+                  {logs.map((log) => (
+                    <tr key={log.id ?? log.filename}>
                       <td>{log.filename}</td>
                       <td>
                         {log.asOfDate
@@ -286,6 +340,30 @@ export default function UploadDocument() {
                       </td>
                       <td>
                         {dayjs(log.uploadTime).format("YYYY-MM-DD HH:mm:ss")}
+                      </td>
+                      <td className="text-center">
+                        <Button
+                          variant="outline-danger"
+                          size="sm"
+                          className="d-inline-flex align-items-center"
+                          disabled={deletingId === log.id}
+                          onClick={() => handleDeleteDocument(log)}
+                        >
+                          {deletingId === log.id ? (
+                            <>
+                              <Spinner
+                                animation="border"
+                                size="sm"
+                                className="me-2"
+                              />
+                              Deleting...
+                            </>
+                          ) : (
+                            <>
+                              <span>Delete</span>
+                            </>
+                          )}
+                        </Button>
                       </td>
                     </tr>
                   ))}

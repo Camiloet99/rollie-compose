@@ -6,9 +6,11 @@ export default function AdvancedFilters({
   handleChange,
   loading = false,
 }) {
+  const hasWindow = Boolean(filters.window);
+
   return (
     <Row className="g-3 mt-3">
-      {/* Average from (window) */}
+      {/* Average from (window) -> se usa con as_of_date/created_at */}
       <Col md={3}>
         <Form.Group controlId="window">
           <Form.Label>Average from</Form.Label>
@@ -25,7 +27,8 @@ export default function AdvancedFilters({
           </Form.Select>
         </Form.Group>
       </Col>
-      {/* Brand */}
+
+      {/* Brand -> columna brand */}
       <Col md={3}>
         <Form.Group controlId="brand">
           <Form.Label>Brand</Form.Label>
@@ -39,7 +42,8 @@ export default function AdvancedFilters({
           />
         </Form.Group>
       </Col>
-      {/* Status (estado) */}
+
+      {/* Status (estado) -> columna estado */}
       <Col md={3}>
         <Form.Group controlId="estado">
           <Form.Label>Status</Form.Label>
@@ -48,11 +52,12 @@ export default function AdvancedFilters({
             name="estado"
             value={filters.estado || ""}
             onChange={handleChange}
-            placeholder="e.g. n7, bnib, full set…"
+            placeholder="n6, n12, bnib…"
             disabled={loading}
           />
         </Form.Group>
       </Col>
+
       {/* Bracelet */}
       <Col md={3}>
         <Form.Group controlId="bracelet">
@@ -67,20 +72,22 @@ export default function AdvancedFilters({
           />
         </Form.Group>
       </Col>
-      {/* Color (se mapea a colorDial en el payload del request) */}
+
+      {/* Color */}
       <Col md={3}>
         <Form.Group controlId="color">
-          <Form.Label>Bracelet / Color</Form.Label>
+          <Form.Label>Dial / Color</Form.Label>
           <Form.Control
             type="text"
             name="color"
             value={filters.color || ""}
             onChange={handleChange}
-            placeholder="Dial color (e.g. Tiffany, Blue…)"
+            placeholder="Tiffany, Blue, Black…"
             disabled={loading}
           />
         </Form.Group>
       </Col>
+
       {/* Condition */}
       <Col md={3}>
         <Form.Group controlId="condition">
@@ -101,6 +108,7 @@ export default function AdvancedFilters({
           </Form.Select>
         </Form.Group>
       </Col>
+
       {/* Production Year */}
       <Col md={3}>
         <Form.Group controlId="year">
@@ -117,6 +125,7 @@ export default function AdvancedFilters({
           />
         </Form.Group>
       </Col>
+
       {/* Min / Max Price */}
       <Col md={3}>
         <Form.Group controlId="priceMin">
@@ -146,6 +155,60 @@ export default function AdvancedFilters({
           />
         </Form.Group>
       </Col>
+
+      {/* Currency */}
+      <Col md={3}>
+        <Form.Group controlId="currency">
+          <Form.Label>Currency</Form.Label>
+          <Form.Select
+            name="currency"
+            value={filters.currency || ""}
+            onChange={handleChange}
+            disabled={loading}
+          >
+            <option value="">Any</option>
+            <option value="USD">USD</option>
+            <option value="HKD">HKD</option>
+            <option value="EUR">EUR</option>
+            {/* agrega otras que uses realmente */}
+          </Form.Select>
+        </Form.Group>
+      </Col>
+
+      {/* Keyword / Text */}
+      <Col md={6}>
+        <Form.Group controlId="text">
+          <Form.Label>Keyword / Text</Form.Label>
+          <Form.Control
+            type="text"
+            name="text"
+            value={filters.text || ""}
+            onChange={handleChange}
+            placeholder="full set, box, papers…"
+            disabled={loading}
+          />
+        </Form.Group>
+      </Col>
+
+      {/* Average mode: ALL / LOW / MID / HIGH */}
+      <Col md={3}>
+        <Form.Group controlId="avgMode">
+          <Form.Label>Average focus</Form.Label>
+          <Form.Select
+            name="avgMode"
+            value={filters.avgMode || ""}
+            onChange={handleChange}
+            disabled={loading || !hasWindow} // sólo tiene sentido si hay window
+          >
+            <option value="">All prices (overall avg)</option>
+            <option value="low">Low (bottom market)</option>
+            <option value="mid">Mid (middle market)</option>
+            <option value="high">High (top market)</option>
+          </Form.Select>
+        </Form.Group>
+      </Col>
+
+      {/* Sort */}
       <Col md={3}>
         <Form.Group controlId="sort">
           <Form.Label>Sort</Form.Label>

@@ -50,5 +50,14 @@ public class AdminDocumentController {
         return documentUploadService.getAllUploadLogs()
                 .map(ControllerUtils::ok);
     }
+
+    @DeleteMapping("/{id}")
+    public Mono<ResponseEntity<ResponseBody<Object>>> deleteDocument(
+            @PathVariable("id") Long documentId
+    ) {
+        return documentUploadService
+                .deleteDocumentAndAssociatedWatches(documentId)
+                .map(ControllerUtils::ok);
+    }
 }
 

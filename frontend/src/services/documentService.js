@@ -28,3 +28,12 @@ export const getUploadedDocuments = async () => {
     throw err.response || err;
   }
 };
+
+export const deleteUploadedDocument = async (id) => {
+  try {
+    const res = await api.delete(`/admin/documents/${id}`);
+    return res.data?.result;
+  } catch (err) {
+    throw err.response || err;
+  }
+};

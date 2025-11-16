@@ -82,6 +82,27 @@ public class DocumentUploadService {
                 });
     }
 
+    public Mono<Object> deleteDocumentAndAssociatedWatches(Long documentId) {
+        return logRepository.findById(documentId)
+                .switchIfEmpty(Mono.error(new IllegalArgumentException("Document log not found")))
+                .flatMap(log -> {
+                    LocalDate asOfDate = log.getAsOfDate();
+
+                    // 1) Borrar watches en el backend Python por asOfDate
+                    return webClient.delete()
+                            .uri(uriBuilder -> uriBuilder
+                                    .path("/watches/by-as-of/{asOfDate}")
+                                    .build(asOfDate.toString()))
+                            .retrieve()
+                            .bodyToMono(Object.class)
+                            // 2) Si Python responde OK, borrar el log en la BD de Java
+                            .flatMap(pythonResponse ->
+                                    logRepository.delete(log)
+                                            .thenReturn(pythonResponse)
+                            );
+                });
+    }
+
     private String sanitizeFilename(String raw) {
         String cleaned = (raw == null || raw.isBlank()) ? "upload.xlsx" : raw;
         cleaned = cleaned.replace("\\", "/");
