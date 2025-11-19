@@ -43,6 +43,7 @@ public class WatchQueryService {
                 .all()
                 .collectList();
     }
+
     /* ======================
        BÚSQUEDA AVANZADA
        ====================== */
@@ -124,7 +125,14 @@ public class WatchQueryService {
             return Long.parseLong(String.valueOf(v));
         }).one();
 
-        Mono<List<WatchEntity>> itemsMono = itemSpec.map(this::mapRow).all().collectList();
+        // *** FX / USD ***
+        // 1) Traemos los items
+        // 2) Convertimos monto_final a USD usando ExchangeRateService
+        Mono<List<WatchEntity>> itemsMono = itemSpec
+                .map(this::mapRow)
+                .all()
+                .flatMap(this::convertEntityToUsd)   // <--- conversión a USD por item
+                .collectList();
 
         return Mono.zip(totalMono, itemsMono)
                 .map(t -> PageResult.of(t.getT2(), t.getT1(), page, size));
@@ -189,7 +197,7 @@ public class WatchQueryService {
             params.put("txt", effectiveText.trim());
         }
 
-        // Query cruda: traemos filas individuales, sin AVG ni GROUP BY
+        // Query cruda: traemos filas individuales
         String sql =
                 "SELECT brand, modelo, currency, monto_final, as_of_date, created_at " +
                         "FROM watches " + where.toString();
@@ -199,54 +207,67 @@ public class WatchQueryService {
             spec = spec.bind(e.getKey(), e.getValue());
         }
 
+        // *** FX / USD ***
+        // 1) Traemos filas
+        // 2) Convertimos cada monto_final a USD
+        // 3) Agrupamos por brand+modelo (ya todo en USD)
         return spec.map((row, meta) -> new RowLite(row))
                 .all()
-                .collectList()
-                .map(rows -> {
-                    // 1) agrupar por brand + modelo + currency
-                    Map<String, List<RowLite>> grouped = rows.stream().collect(
-                            Collectors.groupingBy(r -> {
-                                String b   = r.get("brand", String.class);
-                                String m   = r.get("modelo", String.class);
-                                String cur = r.get("currency", String.class);
-                                return (b == null ? "" : b) + "|" +
-                                        (m == null ? "" : m) + "|" +
-                                        (cur == null ? "" : cur);
-                            })
+                .flatMap(r -> {
+                    BigDecimal mf = r.get("monto_final", BigDecimal.class);
+                    String curr   = r.get("currency", String.class);
+                    if (mf == null || curr == null) {
+                        return Mono.empty();
+                    }
+                    LocalDate fxDate = resolveFxDate(
+                            r.get("as_of_date", LocalDate.class),
+                            r.get("created_at", LocalDateTime.class)
                     );
+                    return exchangeRateService.convertToUSD(curr, mf.doubleValue(), fxDate)
+                            .map(usd -> Tuples.of(r, usd));
+                })
+                .collectList()
+                .map(list -> {
+                    // 1) Agrupar por brand + modelo (ya no por currency, todo está en USD)
+                    Map<String, List<Tuple2<RowLite, Double>>> grouped = list.stream()
+                            .collect(Collectors.groupingBy(t -> {
+                                RowLite r = t.getT1();
+                                String b = r.get("brand", String.class);
+                                String m = r.get("modelo", String.class);
+                                return (b == null ? "" : b) + "|" + (m == null ? "" : m);
+                            }));
 
                     List<WatchEntity> aggregates = new ArrayList<>();
 
-                    for (Map.Entry<String, List<RowLite>> entry : grouped.entrySet()) {
-                        List<RowLite> groupRows = entry.getValue();
+                    for (Map.Entry<String, List<Tuple2<RowLite, Double>>> entry : grouped.entrySet()) {
+                        List<Tuple2<RowLite, Double>> groupRows = entry.getValue();
 
-                        // precios ordenados
-                        List<BigDecimal> prices = groupRows.stream()
-                                .map(r -> r.get("monto_final", BigDecimal.class))
-                                .filter(Objects::nonNull)
+                        // Lista de precios en USD
+                        List<BigDecimal> pricesUsd = groupRows.stream()
+                                .map(Tuple2::getT2)
+                                .map(BigDecimal::valueOf)
                                 .sorted()
                                 .collect(Collectors.toList());
 
-                        if (prices.isEmpty()) continue;
+                        if (pricesUsd.isEmpty()) continue;
 
-                        double avgPrice = computeAvgByMode(prices, avgMode);
+                        double avgPrice = computeAvgByMode(pricesUsd, avgMode);
 
-                        // tomamos datos base de la primera fila (brand/modelo/currency)
-                        RowLite base = groupRows.get(0);
+                        // tomamos datos base de la primera fila (brand/modelo)
+                        RowLite base = groupRows.get(0).getT1();
                         String brand  = base.get("brand", String.class);
                         String modelo = base.get("modelo", String.class);
-                        String curr   = base.get("currency", String.class);
 
                         // última fecha en la ventana
                         LocalDate lastAsOf = groupRows.stream()
-                                .map(r -> r.get("as_of_date", LocalDate.class))
+                                .map(t -> t.getT1().get("as_of_date", LocalDate.class))
                                 .filter(Objects::nonNull)
                                 .max(Comparator.naturalOrder())
                                 .orElse(null);
 
                         // último created_at en la ventana
                         LocalDateTime lastCreated = groupRows.stream()
-                                .map(r -> r.get("created_at", LocalDateTime.class))
+                                .map(t -> t.getT1().get("created_at", LocalDateTime.class))
                                 .filter(Objects::nonNull)
                                 .max(Comparator.naturalOrder())
                                 .orElse(null);
@@ -257,10 +278,10 @@ public class WatchQueryService {
                                 .cleanText(null)
                                 .brand(brand)
                                 .modelo(modelo)
-                                .currency(curr)
+                                .currency("USD") // <-- siempre USD
                                 .monto(null)
                                 .descuento(null)
-                                .montoFinal(BigDecimal.valueOf(avgPrice))
+                                .montoFinal(BigDecimal.valueOf(avgPrice)) // promedio en USD
                                 .estado(null)
                                 .condicion(null)
                                 .anio(null)
@@ -648,6 +669,29 @@ public class WatchQueryService {
         RowLite(io.r2dbc.spi.Row row) { this.row = row; }
         <T> T get(String col, Class<T> type) { return row.get(col, type); }
     }
+
+    // ========= Helpers para FX / USD =========
+
+    /** Selecciona la fecha a usar para FX: primero asOfDate, luego createdAt, luego hoy. */
+    private LocalDate resolveFxDate(LocalDate asOf, LocalDateTime createdAt) {
+        if (asOf != null) return asOf;
+        if (createdAt != null) return createdAt.toLocalDate();
+        return LocalDate.now();
+    }
+
+    /** Convierte monto_final de una entidad a USD y setea currency = "USD". */
+    private Mono<WatchEntity> convertEntityToUsd(WatchEntity we) {
+        BigDecimal mf = we.getMontoFinal();
+        String curr   = we.getCurrency();
+        if (mf == null || curr == null) {
+            return Mono.just(we);
+        }
+        LocalDate fxDate = resolveFxDate(we.getAsOfDate(), we.getCreatedAt());
+        return exchangeRateService.convertToUSD(curr, mf.doubleValue(), fxDate)
+                .map(usd -> {
+                    we.setMontoFinal(BigDecimal.valueOf(usd));
+                    we.setCurrency("USD");
+                    return we;
+                });
+    }
 }
-
-
