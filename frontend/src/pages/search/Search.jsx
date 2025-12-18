@@ -113,8 +113,7 @@ export default function Search() {
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const abortRef = useRef(null);
   const debounceRef = useRef(null);
-  const [suppressNextAutocomplete, setSuppressNextAutocomplete] =
-    useState(false);
+  const suppressNextAutocompleteRef = useRef(false);
 
   useEffect(() => {
     if (!filters.window && filters.avgMode) {
@@ -129,9 +128,9 @@ export default function Search() {
       return;
     }
 
-    // ⬅️ si acabamos de seleccionar una sugerencia, saltamos este ciclo
-    if (suppressNextAutocomplete) {
-      setSuppressNextAutocomplete(false);
+    // ✅ si acabamos de seleccionar una sugerencia, saltamos 1 ciclo sin re-disparar el effect
+    if (suppressNextAutocompleteRef.current) {
+      suppressNextAutocompleteRef.current = false;
       return;
     }
 
@@ -144,6 +143,7 @@ export default function Search() {
 
     setSuggestionsLoading(true);
     if (debounceRef.current) clearTimeout(debounceRef.current);
+
     debounceRef.current = setTimeout(async () => {
       if (abortRef.current) abortRef.current.abort();
       const controller = new AbortController();
@@ -166,11 +166,11 @@ export default function Search() {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [filters.reference, autocompleteEnabled, suppressNextAutocomplete]);
+  }, [filters.reference, autocompleteEnabled]);
 
   const onPickSuggestion = (val, _setFilters) => {
     // NEW: evita que el useEffect vuelva a abrir el dropdown en este cambio
-    setSuppressNextAutocomplete(true);
+    suppressNextAutocompleteRef.current = true;
 
     _setFilters((prev) => ({ ...prev, reference: val }));
     setReferenceSuggestions([]);
