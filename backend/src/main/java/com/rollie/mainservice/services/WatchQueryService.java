@@ -265,7 +265,6 @@ public class WatchQueryService {
         int n = sortedPrices.size();
         if (n == 0) return 0;
 
-        // convertimos a double para facilitar
         List<Double> vals = sortedPrices.stream()
                 .map(BigDecimal::doubleValue)
                 .sorted()
@@ -275,8 +274,7 @@ public class WatchQueryService {
             return vals.stream().mapToDouble(Double::doubleValue).average().orElse(0);
         }
 
-        // dividimos en 3 terciles
-        int tercilSize = Math.max(1, n / 3); // al menos 1 elemento
+        int tercilSize = Math.max(1, n / 3);
 
         int start, end;
         switch (mode) {
@@ -287,7 +285,6 @@ public class WatchQueryService {
             case MID:
                 start = tercilSize;
                 end   = Math.min(2 * tercilSize, n);
-                // si n < 3, ajustamos para que haya algo
                 if (start >= end) {
                     start = 0;
                     end = n;
@@ -306,11 +303,6 @@ public class WatchQueryService {
                 .orElse(0);
     }
 
-
-
-    /* ======================
-       FACETAS
-       ====================== */
     public Mono<FacetsResponse> facets(WatchFilter f) {
         String where = buildWhere(f);
         Map<String, Object> params = buildParams(f);
@@ -332,9 +324,6 @@ public class WatchQueryService {
                 );
     }
 
-    /* ======================
-       RESUMEN POR MODELO
-       ====================== */
     public Mono<ModelSummary> summarizeModel(String modelo) {
         if (!nonEmpty(modelo)) return Mono.empty();
 
@@ -389,9 +378,6 @@ public class WatchQueryService {
                 });
     }
 
-    /* ======================
-       DASHBOARD POR BRAND
-       ====================== */
     public Mono<BrandDashboard> brandDashboard(String brand, WatchFilter extraFilters) {
         if (!nonEmpty(brand)) return Mono.empty();
 
@@ -455,9 +441,6 @@ public class WatchQueryService {
                 });
     }
 
-    /* ======================
-       HISTORIAL DE PRECIOS
-       ====================== */
     public Mono<List<WatchPriceHistoryResponse>> priceHistory(String modelo, int days) {
         if (!nonEmpty(modelo)) return Mono.just(Collections.<WatchPriceHistoryResponse>emptyList());
         LocalDateTime from = LocalDateTime.now().minusDays(Math.max(1, days));
@@ -491,10 +474,6 @@ public class WatchQueryService {
                 })
                 .collectList();
     }
-
-    /* ======================
-       Helpers
-       ====================== */
 
     private String buildWhere(WatchFilter f) {
         StringBuilder where = new StringBuilder(" WHERE 1=1 ");
@@ -586,28 +565,30 @@ public class WatchQueryService {
         <T> T get(String col, Class<T> type) { return row.get(col, type); }
     }
 
-    // ========= Helpers para FX / USD =========
-
-    /** Selecciona la fecha a usar para FX: primero asOfDate, luego createdAt, luego hoy. */
     private LocalDate resolveFxDate(LocalDate asOf, LocalDateTime createdAt) {
         if (asOf != null) return asOf;
         if (createdAt != null) return createdAt.toLocalDate();
         return LocalDate.now();
     }
 
-    /** Convierte monto_final de una entidad a USD y setea currency = "USD". */
     private Mono<WatchEntity> convertEntityToUsd(WatchEntity we) {
         BigDecimal mf = we.getMontoFinal();
         String curr   = we.getCurrency();
+
         if (mf == null || curr == null) {
             return Mono.just(we);
         }
+
         LocalDate fxDate = resolveFxDate(we.getAsOfDate(), we.getCreatedAt());
+
         return exchangeRateService.convertToUSD(curr, mf.doubleValue(), fxDate)
                 .map(usd -> {
                     we.setMontoFinal(BigDecimal.valueOf(usd));
                     we.setCurrency("USD");
                     return we;
-                });
+                })
+                .switchIfEmpty(Mono.fromSupplier(() -> we))
+                .onErrorResume(ex -> Mono.just(we));
     }
+
 }
