@@ -44,122 +44,23 @@ public class WatchQueryService {
                 .collectList();
     }
 
-    /* ======================
-       BÚSQUEDA AVANZADA
-       ====================== */
-    public Mono<PageResult<WatchEntity>> search(WatchFilter f, PageRequestEx req) {
-        int size = Math.max(1, Math.min(req.getSize() == 0 ? 50 : req.getSize(), 200));
-        int page = Math.max(0, req.getPage());
-        int offset = page * size;
-
-        StringBuilder where = new StringBuilder(" WHERE 1=1 ");
-        Map<String, Object> params = new HashMap<>();
-
-        if (nonEmpty(f.getBrand()))     { where.append(" AND UPPER(brand) = UPPER(:brand) ");           params.put("brand", f.getBrand().trim()); }
-        if (nonEmpty(f.getModelo()))    { where.append(" AND UPPER(modelo) = UPPER(:modelo) ");         params.put("modelo", f.getModelo().trim()); }
-        if (nonEmpty(f.getColor()))     { where.append(" AND UPPER(color) = UPPER(:color) ");           params.put("color", f.getColor().trim()); }
-        if (nonEmpty(f.getCondicion())) { where.append(" AND UPPER(condicion) = UPPER(:condicion) ");   params.put("condicion", f.getCondicion().trim()); }
-        if (nonEmpty(f.getBracelet()))  { where.append(" AND UPPER(bracelet) = UPPER(:bracelet) ");     params.put("bracelet", f.getBracelet().trim()); }
-
-        // NUEVO: estado
-        if (nonEmpty(f.getEstado()))    { where.append(" AND UPPER(estado) = UPPER(:estado) ");         params.put("estado", f.getEstado().trim()); }
-
-        // Año: exacto si viene 'anio', si no, rango
-        if (f.getAnio() != null) {
-            where.append(" AND anio = :anio "); params.put("anio", f.getAnio());
-        } else {
-            if (f.getAnioFrom() != null) { where.append(" AND anio >= :anioFrom "); params.put("anioFrom", f.getAnioFrom()); }
-            if (f.getAnioTo() != null)   { where.append(" AND anio <= :anioTo ");   params.put("anioTo",   f.getAnioTo()); }
-        }
-
-        if (f.getPriceMin() != null)    { where.append(" AND monto_final >= :pmin "); params.put("pmin", f.getPriceMin()); }
-        if (f.getPriceMax() != null)    { where.append(" AND monto_final <= :pmax "); params.put("pmax", f.getPriceMax()); }
-        if (nonEmpty(f.getCurrency()))  { where.append(" AND UPPER(currency) = UPPER(:curr) "); params.put("curr", f.getCurrency().trim()); }
-
-        // Texto: usa text si llega, si no info
-        String effectiveText = nonEmpty(f.getText()) ? f.getText() : f.getInfo();
-        if (nonEmpty(effectiveText)) {
-            where.append(" AND UPPER(clean_text) LIKE CONCAT('%', UPPER(:txt), '%') ");
-            params.put("txt", effectiveText.trim());
-        }
-
-        if (f.getAsOfFrom() != null)    { where.append(" AND as_of_date >= :asFrom "); params.put("asFrom", f.getAsOfFrom()); }
-        if (f.getAsOfTo() != null)      { where.append(" AND as_of_date <= :asTo ");   params.put("asTo",   f.getAsOfTo()); }
-
-        String sortKey = (req.getSort() == null) ? "date_desc" : req.getSort();
-        String orderBy;
-        if ("price_asc".equalsIgnoreCase(sortKey)) {
-            orderBy = " ORDER BY monto_final ASC, id ASC ";
-        } else if ("price_desc".equalsIgnoreCase(sortKey)) {
-            orderBy = " ORDER BY monto_final DESC, id DESC ";
-        } else if ("brand_asc".equalsIgnoreCase(sortKey)) {
-            orderBy = " ORDER BY brand ASC, modelo ASC, id ASC ";
-        } else if ("brand_desc".equalsIgnoreCase(sortKey)) {
-            orderBy = " ORDER BY brand DESC, modelo DESC, id DESC ";
-        } else if ("date_asc".equalsIgnoreCase(sortKey)) {
-            orderBy = " ORDER BY created_at ASC, id ASC ";
-        } else { // date_desc por defecto
-            orderBy = " ORDER BY created_at DESC, id DESC ";
-        }
-
-        String baseSelect =
-                "SELECT id, fecha_archivo, clean_text, brand, modelo, currency, monto, descuento, " +
-                        "       monto_final, estado, condicion, anio, bracelet, color, as_of_date, created_at " +
-                        "FROM watches ";
-
-        String sqlItems = baseSelect + where + orderBy + " LIMIT :limit OFFSET :offset ";
-        String sqlCount = "SELECT COUNT(*) AS c FROM watches " + where;
-
-        DatabaseClient.GenericExecuteSpec countSpec = databaseClient.sql(sqlCount);
-        DatabaseClient.GenericExecuteSpec itemSpec  = databaseClient.sql(sqlItems);
-
-        for (Map.Entry<String, Object> e : params.entrySet()) {
-            countSpec = countSpec.bind(e.getKey(), e.getValue());
-            itemSpec  = itemSpec.bind(e.getKey(), e.getValue());
-        }
-        itemSpec = itemSpec.bind("limit", size).bind("offset", offset);
-
-        Mono<Long> totalMono = countSpec.map((row, meta) -> {
-            Object v = row.get("c");
-            if (v instanceof Number) return ((Number) v).longValue();
-            return Long.parseLong(String.valueOf(v));
-        }).one();
-
-        // *** FX / USD ***
-        // 1) Traemos los items
-        // 2) Convertimos monto_final a USD usando ExchangeRateService
-        Mono<List<WatchEntity>> itemsMono = itemSpec
-                .map(this::mapRow)
-                .all()
-                .flatMap(this::convertEntityToUsd)   // <--- conversión a USD por item
-                .collectList();
-
-        return Mono.zip(totalMono, itemsMono)
-                .map(t -> PageResult.of(t.getT2(), t.getT1(), page, size));
-    }
-
-
-    public Mono<PageResult<WatchEntity>> averageByWindow(WatchFilter f,
-                                                         String window,
-                                                         PageRequestEx req,
-                                                         String avgModeStr) {
-        // Debe venir brand o modelo (igual que antes)
-        boolean hasBrand  = f.getBrand()  != null && !f.getBrand().trim().isEmpty();
-        boolean hasModelo = f.getModelo() != null && !f.getModelo().trim().isEmpty();
+    public Mono<List<WatchEntity>> averageByWindowAll(WatchFilter f,
+                                                      String window,
+                                                      String sort,
+                                                      String avgModeStr) {
+        boolean hasBrand  = nonEmpty(f.getBrand());
+        boolean hasModelo = nonEmpty(f.getModelo());
         if (!hasBrand && !hasModelo) {
             return Mono.error(new IllegalArgumentException("Missing brand or modelo for average search"));
         }
 
-        // Modo de promedio: ALL (default), LOW, MID, HIGH
         AvgMode avgMode = AvgMode.from(avgModeStr);
 
-        // Ventana: today / 7d / 15d  (rango inclusivo)
         final LocalDate to   = LocalDate.now();
         final LocalDate from =
                 "7d".equalsIgnoreCase(window)  ? to.minusDays(6) :
-                        "15d".equalsIgnoreCase(window) ? to.minusDays(14) : to; // default: today
+                        "15d".equalsIgnoreCase(window) ? to.minusDays(14) : to;
 
-        // WHERE dinámico (similar al método anterior, pero SIN group/AVG)
         StringBuilder where = new StringBuilder(" WHERE as_of_date BETWEEN :from AND :to ");
         Map<String, Object> params = new HashMap<>();
         params.put("from", from);
@@ -172,63 +73,48 @@ public class WatchQueryService {
         if (nonEmpty(f.getBracelet()))  { where.append(" AND UPPER(bracelet) = UPPER(:bracelet) ");   params.put("bracelet", f.getBracelet().trim()); }
         if (nonEmpty(f.getEstado()))    { where.append(" AND UPPER(estado)   = UPPER(:estado) ");     params.put("estado", f.getEstado().trim()); }
 
-        if (f.getAnio() != null)        {
+        if (f.getAnio() != null) {
             where.append(" AND anio = :anio ");
             params.put("anio", f.getAnio());
         } else {
-            if (f.getAnioFrom() != null){
-                where.append(" AND anio >= :anioFrom ");
-                params.put("anioFrom", f.getAnioFrom());
-            }
-            if (f.getAnioTo()   != null){
-                where.append(" AND anio <= :anioTo ");
-                params.put("anioTo",   f.getAnioTo());
-            }
+            if (f.getAnioFrom() != null){ where.append(" AND anio >= :anioFrom "); params.put("anioFrom", f.getAnioFrom()); }
+            if (f.getAnioTo()   != null){ where.append(" AND anio <= :anioTo ");   params.put("anioTo",   f.getAnioTo()); }
         }
 
-        if (f.getPriceMin() != null)    { where.append(" AND monto_final >= :pmin ");                 params.put("pmin", f.getPriceMin()); }
-        if (f.getPriceMax() != null)    { where.append(" AND monto_final <= :pmax ");                 params.put("pmax", f.getPriceMax()); }
-        if (nonEmpty(f.getCurrency()))  { where.append(" AND UPPER(currency) = UPPER(:curr) ");       params.put("curr", f.getCurrency().trim()); }
+        if (f.getPriceMin() != null)    { where.append(" AND monto_final >= :pmin "); params.put("pmin", f.getPriceMin()); }
+        if (f.getPriceMax() != null)    { where.append(" AND monto_final <= :pmax "); params.put("pmax", f.getPriceMax()); }
+        if (nonEmpty(f.getCurrency()))  { where.append(" AND UPPER(currency) = UPPER(:curr) "); params.put("curr", f.getCurrency().trim()); }
 
-        // Texto opcional (clean_text)
         String effectiveText = nonEmpty(f.getText()) ? f.getText() : f.getInfo();
         if (nonEmpty(effectiveText)) {
             where.append(" AND UPPER(clean_text) LIKE CONCAT('%', UPPER(:txt), '%') ");
             params.put("txt", effectiveText.trim());
         }
 
-        // Query cruda: traemos filas individuales
         String sql =
                 "SELECT brand, modelo, currency, monto_final, as_of_date, created_at " +
-                        "FROM watches " + where.toString();
+                        "FROM watches " + where;
 
         DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
-        for (Map.Entry<String, Object> e : params.entrySet()) {
-            spec = spec.bind(e.getKey(), e.getValue());
-        }
+        for (Map.Entry<String, Object> e : params.entrySet()) spec = spec.bind(e.getKey(), e.getValue());
 
-        // *** FX / USD ***
-        // 1) Traemos filas
-        // 2) Convertimos cada monto_final a USD
-        // 3) Agrupamos por brand+modelo (ya todo en USD)
         return spec.map((row, meta) -> new RowLite(row))
                 .all()
                 .flatMap(r -> {
                     BigDecimal mf = r.get("monto_final", BigDecimal.class);
                     String curr   = r.get("currency", String.class);
-                    if (mf == null || curr == null) {
-                        return Mono.empty();
-                    }
+                    if (mf == null || curr == null) return Mono.empty();
+
                     LocalDate fxDate = resolveFxDate(
                             r.get("as_of_date", LocalDate.class),
                             r.get("created_at", LocalDateTime.class)
                     );
+
                     return exchangeRateService.convertToUSD(curr, mf.doubleValue(), fxDate)
                             .map(usd -> Tuples.of(r, usd));
                 })
                 .collectList()
                 .map(list -> {
-                    // 1) Agrupar por brand + modelo (ya no por currency, todo está en USD)
                     Map<String, List<Tuple2<RowLite, Double>>> grouped = list.stream()
                             .collect(Collectors.groupingBy(t -> {
                                 RowLite r = t.getT1();
@@ -242,7 +128,6 @@ public class WatchQueryService {
                     for (Map.Entry<String, List<Tuple2<RowLite, Double>>> entry : grouped.entrySet()) {
                         List<Tuple2<RowLite, Double>> groupRows = entry.getValue();
 
-                        // Lista de precios en USD
                         List<BigDecimal> pricesUsd = groupRows.stream()
                                 .map(Tuple2::getT2)
                                 .map(BigDecimal::valueOf)
@@ -253,96 +138,127 @@ public class WatchQueryService {
 
                         double avgPrice = computeAvgByMode(pricesUsd, avgMode);
 
-                        // tomamos datos base de la primera fila (brand/modelo)
                         RowLite base = groupRows.get(0).getT1();
                         String brand  = base.get("brand", String.class);
                         String modelo = base.get("modelo", String.class);
 
-                        // última fecha en la ventana
                         LocalDate lastAsOf = groupRows.stream()
                                 .map(t -> t.getT1().get("as_of_date", LocalDate.class))
                                 .filter(Objects::nonNull)
                                 .max(Comparator.naturalOrder())
                                 .orElse(null);
 
-                        // último created_at en la ventana
                         LocalDateTime lastCreated = groupRows.stream()
                                 .map(t -> t.getT1().get("created_at", LocalDateTime.class))
                                 .filter(Objects::nonNull)
                                 .max(Comparator.naturalOrder())
                                 .orElse(null);
 
-                        WatchEntity we = WatchEntity.builder()
-                                .id(null)
-                                .fechaArchivo(null)
-                                .cleanText(null)
+                        aggregates.add(WatchEntity.builder()
+                                .currency("USD")
                                 .brand(brand)
                                 .modelo(modelo)
-                                .currency("USD") // <-- siempre USD
-                                .monto(null)
-                                .descuento(null)
-                                .montoFinal(BigDecimal.valueOf(avgPrice)) // promedio en USD
-                                .estado(null)
-                                .condicion(null)
-                                .anio(null)
-                                .bracelet(null)
-                                .color(null)
+                                .montoFinal(BigDecimal.valueOf(avgPrice))
                                 .asOfDate(lastAsOf)
                                 .createdAt(lastCreated)
-                                .build();
-
-                        aggregates.add(we);
+                                .build());
                     }
 
-                    // 2) Ordenar según sort (price / brand / date)
-                    String sortKey = (req.getSort() == null) ? "price_desc" : req.getSort();
+                    // sort (mismo switch que ya tienes)
+                    String sortKey = (sort == null) ? "price_desc" : sort;
                     Comparator<WatchEntity> cmp;
                     switch (sortKey.toLowerCase()) {
                         case "price_asc":
-                            cmp = Comparator.comparing(
-                                    WatchEntity::getMontoFinal,
-                                    Comparator.nullsLast(BigDecimal::compareTo)
-                            );
+                            cmp = Comparator.comparing(WatchEntity::getMontoFinal, Comparator.nullsLast(BigDecimal::compareTo));
                             break;
                         case "price_desc":
-                            cmp = Comparator.comparing(
-                                    WatchEntity::getMontoFinal,
-                                    Comparator.nullsLast(BigDecimal::compareTo)
-                            ).reversed();
+                            cmp = Comparator.comparing(WatchEntity::getMontoFinal, Comparator.nullsLast(BigDecimal::compareTo)).reversed();
                             break;
                         case "brand_asc":
-                            cmp = Comparator
-                                    .comparing(WatchEntity::getBrand, Comparator.nullsLast(String::compareTo))
+                            cmp = Comparator.comparing(WatchEntity::getBrand, Comparator.nullsLast(String::compareTo))
                                     .thenComparing(WatchEntity::getModelo, Comparator.nullsLast(String::compareTo));
                             break;
                         case "brand_desc":
-                            cmp = Comparator
-                                    .comparing(WatchEntity::getBrand, Comparator.nullsLast(String::compareTo)).reversed()
+                            cmp = Comparator.comparing(WatchEntity::getBrand, Comparator.nullsLast(String::compareTo)).reversed()
                                     .thenComparing(WatchEntity::getModelo, Comparator.nullsLast(String::compareTo)).reversed();
                             break;
                         default:
-                            // por fecha (createdAt)
-                            cmp = Comparator.comparing(
-                                    WatchEntity::getCreatedAt,
-                                    Comparator.nullsLast(LocalDateTime::compareTo)
-                            ).reversed();
+                            cmp = Comparator.comparing(WatchEntity::getCreatedAt, Comparator.nullsLast(LocalDateTime::compareTo)).reversed();
                     }
 
                     aggregates.sort(cmp);
-
-                    // 3) Paginación en memoria
-                    int size = Math.max(1, Math.min(req.getSize() == 0 ? 50 : req.getSize(), 200));
-                    int page = Math.max(0, req.getPage());
-                    int total = aggregates.size();
-
-                    int fromIx = Math.min(page * size, total);
-                    int toIx   = Math.min(fromIx + size, total);
-
-                    List<WatchEntity> pageItems =
-                            (fromIx >= toIx) ? Collections.emptyList() : aggregates.subList(fromIx, toIx);
-
-                    return PageResult.of(pageItems, total, page, size);
+                    return aggregates;
                 });
+    }
+
+    public Mono<List<WatchEntity>> searchAll(WatchFilter f, String sort) {
+        StringBuilder where = new StringBuilder(" WHERE 1=1 ");
+        Map<String, Object> params = new HashMap<>();
+
+        if (nonEmpty(f.getBrand()))     { where.append(" AND UPPER(brand) = UPPER(:brand) ");           params.put("brand", f.getBrand().trim()); }
+        if (nonEmpty(f.getModelo()))    { where.append(" AND UPPER(modelo) = UPPER(:modelo) ");         params.put("modelo", f.getModelo().trim()); }
+        if (nonEmpty(f.getColor()))     { where.append(" AND UPPER(color) = UPPER(:color) ");           params.put("color", f.getColor().trim()); }
+        if (nonEmpty(f.getCondicion())) { where.append(" AND UPPER(condicion) = UPPER(:condicion) ");   params.put("condicion", f.getCondicion().trim()); }
+        if (nonEmpty(f.getBracelet()))  { where.append(" AND UPPER(bracelet) = UPPER(:bracelet) ");     params.put("bracelet", f.getBracelet().trim()); }
+
+        // estado
+        if (nonEmpty(f.getEstado()))    { where.append(" AND UPPER(estado) = UPPER(:estado) ");         params.put("estado", f.getEstado().trim()); }
+
+        // Año exacto o rango
+        if (f.getAnio() != null) {
+            where.append(" AND anio = :anio "); params.put("anio", f.getAnio());
+        } else {
+            if (f.getAnioFrom() != null) { where.append(" AND anio >= :anioFrom "); params.put("anioFrom", f.getAnioFrom()); }
+            if (f.getAnioTo() != null)   { where.append(" AND anio <= :anioTo ");   params.put("anioTo", f.getAnioTo()); }
+        }
+
+        if (f.getPriceMin() != null)    { where.append(" AND monto_final >= :pmin "); params.put("pmin", f.getPriceMin()); }
+        if (f.getPriceMax() != null)    { where.append(" AND monto_final <= :pmax "); params.put("pmax", f.getPriceMax()); }
+        if (nonEmpty(f.getCurrency()))  { where.append(" AND UPPER(currency) = UPPER(:curr) "); params.put("curr", f.getCurrency().trim()); }
+
+        // Texto: text o info
+        String effectiveText = nonEmpty(f.getText()) ? f.getText() : f.getInfo();
+        if (nonEmpty(effectiveText)) {
+            where.append(" AND UPPER(clean_text) LIKE CONCAT('%', UPPER(:txt), '%') ");
+            params.put("txt", effectiveText.trim());
+        }
+
+        if (f.getAsOfFrom() != null)    { where.append(" AND as_of_date >= :asFrom "); params.put("asFrom", f.getAsOfFrom()); }
+        if (f.getAsOfTo() != null)      { where.append(" AND as_of_date <= :asTo ");   params.put("asTo", f.getAsOfTo()); }
+
+        String sortKey = (sort == null) ? "date_desc" : sort;
+        String orderBy;
+        if ("price_asc".equalsIgnoreCase(sortKey)) {
+            orderBy = " ORDER BY monto_final ASC, id ASC ";
+        } else if ("price_desc".equalsIgnoreCase(sortKey)) {
+            orderBy = " ORDER BY monto_final DESC, id DESC ";
+        } else if ("brand_asc".equalsIgnoreCase(sortKey)) {
+            orderBy = " ORDER BY brand ASC, modelo ASC, id ASC ";
+        } else if ("brand_desc".equalsIgnoreCase(sortKey)) {
+            orderBy = " ORDER BY brand DESC, modelo DESC, id DESC ";
+        } else if ("date_asc".equalsIgnoreCase(sortKey)) {
+            orderBy = " ORDER BY created_at ASC, id ASC ";
+        } else {
+            orderBy = " ORDER BY created_at DESC, id DESC ";
+        }
+
+        String sql =
+                "SELECT id, fecha_archivo, clean_text, brand, modelo, currency, monto, descuento, " +
+                        "       monto_final, estado, condicion, anio, bracelet, color, as_of_date, created_at " +
+                        "FROM watches " +
+                        where +
+                        orderBy;
+
+        DatabaseClient.GenericExecuteSpec spec = databaseClient.sql(sql);
+        for (Map.Entry<String, Object> e : params.entrySet()) {
+            spec = spec.bind(e.getKey(), e.getValue());
+        }
+
+        return spec
+                .map(this::mapRow)
+                .all()
+                .flatMap(this::convertEntityToUsd) // sigue aplicando FX y deja currency="USD"
+                .collectList();
     }
 
     private double computeAvgByMode(List<BigDecimal> sortedPrices, AvgMode mode) {

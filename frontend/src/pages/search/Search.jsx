@@ -352,29 +352,6 @@ export default function Search() {
     }
   };
 
-  const handleChangePage = async (nextPage) => {
-    try {
-      setLoading(true);
-      const fetched = await runSearch(filters, nextPage, size);
-      setPage(nextPage);
-      setPageResult(fetched);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleChangeSize = async (nextSize) => {
-    try {
-      setLoading(true);
-      const fetched = await runSearch(filters, 0, nextSize);
-      setSize(nextSize);
-      setPage(0);
-      setPageResult(fetched);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <PageTransition>
       <Helmet>
@@ -467,8 +444,6 @@ export default function Search() {
         onHide={() => setShowModal(false)}
         pageResult={pageResult} // <-- ahora PageResult completo
         loading={loading}
-        onChangePage={handleChangePage} // <-- callbacks de paginación
-        onChangeSize={handleChangeSize}
       />
 
       <CompareButton />

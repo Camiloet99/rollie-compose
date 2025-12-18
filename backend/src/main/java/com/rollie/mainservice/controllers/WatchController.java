@@ -19,23 +19,20 @@ public class WatchController {
     private final WatchQueryService watchQueryService;
 
     @PostMapping("/query")
-    public Mono<ResponseEntity<ResponseBody<PageResult<WatchEntity>>>> query(
+    public Mono<ResponseEntity<ResponseBody<List<WatchEntity>>>> query(
             @RequestBody WatchFilter filter,
-            @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "20") int size,
             @RequestParam(name = "sort", defaultValue = "date_desc") String sort,
             @RequestParam(name = "window", required = false) String window,
             @RequestParam(name = "avgMode", required = false) String avgMode
     ) {
-        PageRequestEx req = new PageRequestEx(page, size, sort);
-
         if (window != null && !window.trim().isEmpty()) {
             return watchQueryService
-                    .averageByWindow(filter, window.trim().toLowerCase(), req, avgMode) // NEW
+                    .averageByWindowAll(filter, window.trim().toLowerCase(), sort, avgMode)
                     .map(ControllerUtils::ok);
         }
 
-        return watchQueryService.search(filter, req)
+        return watchQueryService
+                .searchAll(filter, sort)
                 .map(ControllerUtils::ok);
     }
 

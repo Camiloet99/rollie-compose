@@ -1,5 +1,5 @@
 import { Modal, Button, Form } from "react-bootstrap";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import useResultFilters from "./useResultFilters";
 import FiltersRow from "./FiltersRow";
 import ReferencePills from "./ReferencePills";
@@ -13,58 +13,44 @@ import usePriceBuckets from "../../hooks/usePriceBuckets";
 export default function SearchResultsModal({
   show,
   onHide,
-  pageResult = {
-    items: [],
-    total: 0,
-    page: 0,
-    size: 50,
-    pages: 1,
-    hasNext: false,
-    hasPrev: false,
-  },
+  pageResult = { items: [], total: 0 },
   loading = false,
-  onChangePage = () => {},
-  onChangeSize = () => {},
 }) {
-  // Items de la página actual (ya paginados por el backend)
+  // ✅ Backend ya no pagina: items contiene TODO
   const results = pageResult.items || [];
 
   // Favoritos (optimistic)
   const { isFavorite, toggleFavorite, isInFlight } = useFavoritesOptimistic();
 
-  // Filtros dentro del modal — ahora con brand/color/condicion/cleanText
+  // Filtros dentro del modal sobre TODO el set
   const { filters, setFilters, options, filteredResults } = useResultFilters(
     results,
     show
   );
+
   const { colorFilter, conditionFilter, brandFilter, estadoFilter } = filters;
-  const {
-    setColorFilter,
-    setConditionFilter,
-    setEstadoFilter,
-    setBrandFilter,
-  } = setFilters;
+  const { setColorFilter, setConditionFilter, setEstadoFilter, setBrandFilter } =
+    setFilters;
+
   const { colorOptions, conditionOptions, estadoOptions, brandOptions } =
     options;
 
-  // === LISTA QUE SE MUESTRA ===
-  const displayResults = useMemo(
-    () =>
-      filteredResults && Array.isArray(filteredResults)
-        ? filteredResults
-        : results,
-    [filteredResults, results]
-  );
+  // Base list: filtrada o completa
+  const displayResults = useMemo(() => {
+    return Array.isArray(filteredResults) ? filteredResults : results;
+  }, [filteredResults, results]);
 
-  // Referencias (modelos) únicas de esta página (para las pills)
+  // Referencias únicas para pills (sobre lista filtrada)
   const uniqueReferences = useMemo(() => {
     const set = new Set(
-      (displayResults || []).map((w) => (w.modelo ?? "").trim()).filter(Boolean)
+      (displayResults || [])
+        .map((w) => (w.modelo ?? "").trim())
+        .filter(Boolean)
     );
     return Array.from(set);
   }, [displayResults]);
 
-  // === SOLO PARA BUCKETS/CLASIFICACIÓN (USD) ===
+  // === BUCKETS (USD) ===
   const usdForBuckets = useMemo(() => {
     const usd = onlyUSD(displayResults ?? []);
     return (usd || []).map((w) => ({
@@ -80,7 +66,7 @@ export default function SearchResultsModal({
     minGroup: 12,
   });
 
-  // Orden local (price/year) con campos reales del backend
+  // Orden local (price/year)
   const [sort, setSort] = useState("price_desc");
   const sortedResults = useMemo(() => {
     const arr = [...(displayResults || [])];
@@ -103,24 +89,44 @@ export default function SearchResultsModal({
     }
   }, [displayResults, sort]);
 
-  // === Paginación: calcular localmente ===
-  const { page = 0, size = 20, total = 0 } = pageResult;
+  // ✅ Paginación LOCAL
+  const [page, setPage] = useState(0);
+  const [size, setSize] = useState(20);
+
+  const total = sortedResults.length;
   const pages = Math.max(1, Math.ceil(total / Math.max(1, size)));
   const hasPrev = page > 0;
   const hasNext = page < pages - 1;
 
+  // Cuando cambian filtros/resultados o se abre modal, vuelve a page 0
+  useEffect(() => {
+    if (show) setPage(0);
+  }, [show, brandFilter, estadoFilter, colorFilter, conditionFilter, sort, size, total]);
+
+  const paginatedResults = useMemo(() => {
+    const start = page * size;
+    const end = start + size;
+    return sortedResults.slice(start, end);
+  }, [sortedResults, page, size]);
+
+  const fromN = total === 0 ? 0 : page * size + 1;
+  const toN = Math.min((page + 1) * size, total);
+
   const PaginationBar = () => (
     <div className="d-flex flex-wrap align-items-center justify-content-between w-100 gap-2">
       <div className="text-muted small">
-        Showing <strong>{displayResults.length}</strong> of{" "}
-        <strong>{total}</strong>
+        Showing <strong>{fromN}-{toN}</strong> of <strong>{total}</strong>
       </div>
 
       <div className="d-flex align-items-center gap-2">
         <Form.Select
           size="sm"
           value={size}
-          onChange={(e) => onChangeSize(parseInt(e.target.value, 10))}
+          onChange={(e) => {
+            const next = parseInt(e.target.value, 10);
+            setSize(next);
+            setPage(0);
+          }}
           style={{ width: 120 }}
           aria-label="Page size"
         >
@@ -136,18 +142,20 @@ export default function SearchResultsModal({
             size="sm"
             variant="outline-secondary"
             disabled={!hasPrev || loading}
-            onClick={() => onChangePage(Math.max(0, page - 1))}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
           >
             ‹ Prev
           </Button>
+
           <span className="small text-muted">
             Page <strong>{page + 1}</strong> / {pages}
           </span>
+
           <Button
             size="sm"
             variant="outline-secondary"
             disabled={!hasNext || loading}
-            onClick={() => onChangePage(page + 1)}
+            onClick={() => setPage((p) => p + 1)}
           >
             Next ›
           </Button>
@@ -163,11 +171,9 @@ export default function SearchResultsModal({
       </Modal.Header>
 
       <Modal.Body className="pt-0">
-        {/* Toolbar superior (orden/paginación/filtros) */}
         {!loading && displayResults.length > 0 && (
           <div className="filter-row-sticky">
             <div className="results-toolbar d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-              {/* Orden */}
               <div className="d-flex align-items-center gap-2 flex-wrap">
                 <Form.Select
                   size="sm"
@@ -183,24 +189,19 @@ export default function SearchResultsModal({
                 </Form.Select>
               </div>
 
-              {/* Paginación arriba */}
               <PaginationBar />
             </div>
 
-            {/* Filtros internos + referencia pills */}
             <div className="filters-section">
               <FiltersRow
-                // activos
                 brandFilter={brandFilter}
                 estadoFilter={estadoFilter}
                 colorFilter={colorFilter}
                 conditionFilter={conditionFilter}
-                // setters
                 setBrandFilter={setBrandFilter}
                 setEstadoFilter={setEstadoFilter}
                 setColorFilter={setColorFilter}
                 setConditionFilter={setConditionFilter}
-                // opciones
                 brandOptions={brandOptions}
                 estadoOptions={estadoOptions}
                 colorOptions={colorOptions}
@@ -217,29 +218,25 @@ export default function SearchResultsModal({
           </div>
         )}
 
-        {/* Cuerpo (skeleton / vacío / cards) */}
         {loading ? (
           <div>
             {Array.from({ length: 8 }).map((_, i) => (
               <WatchCardSkeleton key={i} />
             ))}
           </div>
-        ) : displayResults.length === 0 ? (
+        ) : total === 0 ? (
           <p className="text-center text-muted mt-4">No results found.</p>
         ) : (
           <div className="mt-3">
-            {sortedResults.map((watch) => {
-              // Clasificación por buckets — espera { cost, reference_code }
+            {paginatedResults.map((watch) => {
               const priceTier = classify({
                 cost: watch.montoFinal ?? watch.monto ?? null,
                 reference_code: watch.modelo ?? "NOREF",
               });
+
               return (
                 <WatchCard
-                  key={
-                    watch.id ??
-                    `${watch.modelo}-${watch.createdAt ?? Math.random()}`
-                  }
+                  key={watch.id ?? `${watch.modelo}-${watch.createdAt ?? Math.random()}`}
                   watch={watch}
                   priceTier={priceTier}
                 />
@@ -250,8 +247,7 @@ export default function SearchResultsModal({
       </Modal.Body>
 
       <Modal.Footer className="border-0 pt-0">
-        {/* Paginación abajo */}
-        {!loading && displayResults.length > 0 && <PaginationBar />}
+        {!loading && total > 0 && <PaginationBar />}
         <Button variant="secondary" onClick={onHide}>
           Close
         </Button>
