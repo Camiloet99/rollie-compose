@@ -12,7 +12,7 @@ from pyspark.sql.functions import (
     array  # <- importante para tokens como arreglo
 )
 from pyspark.sql.types import (
-    StructType, StructField, StringType, IntegerType
+    StructType, StructField, StringType, IntegerType, DateType
 )
 
 # =========================================================
@@ -187,11 +187,35 @@ def process_watch_data_spark(
         .str.strip()
     )
 
-    split_df = df_clean_pd["clean_text"].str.split(expand=True)
+    split_df = df_clean_pd["clean_text"].str.split(r"\s+", n=10, expand=True)
+    split_df = split_df.reindex(columns=range(0, 11))
+    split_df.columns = [str(i) for i in range(0, 11)]
     df_clean_pd = pd.concat([df_clean_pd, split_df], axis=1)
 
-    # Crear SparkDF de vuelta y ordenar/renombrar modelo
-    df_spark = spark.createDataFrame(df_clean_pd)
+    if "fecha" in df_clean_pd.columns:
+        df_clean_pd["fecha"] = pd.to_datetime(df_clean_pd["fecha"], errors="coerce").dt.date
+
+    df_clean_pd = df_clean_pd.where(pd.notnull(df_clean_pd), None)
+
+    for i in range(0, 11):
+        c = str(i)
+        if c in df_clean_pd.columns:
+            df_clean_pd[c] = df_clean_pd[c].astype("string")
+
+    schema_fields = [
+        StructField("filename", StringType(), True),
+        StructField("fecha", DateType(), True),
+        StructField("clean_text", StringType(), True),
+        StructField("longitud", IntegerType(), True),
+        StructField("num_tokens", IntegerType(), True),
+    ]
+    for i in range(0, 11):
+        schema_fields.append(StructField(str(i), StringType(), True))
+
+    schema = StructType(schema_fields)
+
+    df_spark = spark.createDataFrame(df_clean_pd, schema=schema)
+
     df_spark = (
         df_spark
         .filter(~col("clean_text").isin(["-", "", ".breguet", ".omega", "//"]))

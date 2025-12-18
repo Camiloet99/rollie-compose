@@ -197,12 +197,12 @@ export default function UploadDocument() {
               <Form.Label className="fw-semibold">CSV / Excel File</Form.Label>
               <Form.Control
                 type="file"
-                accept=".csv,.xlsx"
+                accept=".csv"
                 onChange={handleFileChange}
                 disabled={loading}
               />
               <Form.Text muted>
-                Only .csv or .xlsx formats are supported.
+                Only .csv format is supported.
               </Form.Text>
             </Form.Group>
 
